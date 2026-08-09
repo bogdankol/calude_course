@@ -2,7 +2,9 @@
 
 ## 1. Overview
 
-A web application where authenticated users can create, view, edit, delete, and publicly share rich-text notes. Notes are created with TipTap, stored as JSON in a SQLite database, and rendered in the browser with formatting.
+A web application where authenticated users can create, view, edit, delete, and publicly share rich-text notes. Notes are created with TipTap, stored as JSON in a SQLite database, and rendered in the browser with formatting. Specs ar in @SPEC.MD file - refer to it when you do something in code or considering a solution of prompt
+
+also give brief replies
 
 ### Core Features
 
