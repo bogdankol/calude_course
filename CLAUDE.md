@@ -36,9 +36,8 @@ data layer for notes, the API routes, and all of the UI.
 | `app/dashboard/page.tsx` | Server component, **gated in the route itself** (not a layout): `getSession` → `redirect("/authenticate")` when absent. Renders `Header` (with `LogoutButton` in its actions slot), the note count + email, a **"New Note"** link, and the notes list via `NoteList` — or an empty state with a "Create your first note" CTA. |
 | `components/LogoutButton.tsx` | Client component. `useTransition` + `signOut()`, then `router.push("/authenticate")` and `router.refresh()`. Now an inline pill so it can sit in `Header`'s `actions` slot — the old `absolute top-[50px] right-[200px] size-[100px]` box collided with the sticky header. |
 | `components/Header.tsx` | Server component. "NextNotes" wordmark linking to `/dashboard` via `next/link`, plus an optional `actions` slot for page-owned controls. Deliberately **not** mounted in `app/layout.tsx` — see the gotcha below. |
-| `app/notes/new/page.tsx` | Server component, session-gated exactly like the dashboard. Renders `Header`, a back link, and `NewNoteForm`. |
+| `app/notes/new/page.tsx` | Server component, session-gated exactly like the dashboard. Renders `Header`, a back link, and `NoteForm` (create mode). |
 | `app/notes/new/actions.ts` | `"use server"`. `createNoteAction(formData)` — re-checks the session, zod-validates the title and the TipTap JSON, calls `createNote`, `revalidatePath("/dashboard")`, then `redirect("/notes/<id>")`. Returns `{ error }` only when it declines to save. |
-| `components/NewNoteForm.tsx` | Client component. Uncontrolled title input + `NoteEditor`. A plain `onSubmit` attaches the editor's JSON to `FormData` and calls the action directly. |
 | `lib/tiptap.ts` | **Single source of truth for the note schema.** `HEADING_LEVELS` (`[1,2,3]`), `EMPTY_DOC`, and `noteExtensions()`. Both the editor and the read-only viewer call it, so their schemas cannot drift. |
 | `components/NoteEditor.tsx` | Client component. TipTap v3 `useEditor` + `EditorContent`, plus the full **SPEC.MD §9.2 toolbar**: a Normal/H1/H2/H3 segmented group, then Bold, Italic, inline code, bullet list, code block, horizontal rule, undo, redo. Active state comes from `useEditorState`; every button carries its keyboard shortcut in `title` *and* `aria-label`. |
 | `app/notes/[id]/page.tsx` | Server component, session-gated. **This is the editor**, per SPEC §8.1 — renders `Header`, a **Back** link to `/dashboard`, `DeleteNoteButton`, the note title as the `h1`, the UTC `updated_at`, and an editable `NoteForm` seeded with the stored title and document. `generateMetadata` retitles the tab. `notFound()` when the id is not this user's. |
@@ -96,12 +95,12 @@ for `/p/[slug]` (§8.1); for the first two it is simply a choice, easily changed
   decoration — `await` on the result still works. Match that for the rest.
 - **`app/api/notes/*`** — no route handlers exist. The new-note flow goes through a
   Server Action instead, so the API surface in spec §7.2 is still entirely unbuilt.
-- **`components/`** — holds `AuthForm`, `LogoutButton`, `Header`, `NewNoteForm`,
-  `NoteEditor`, `NoteContent`. Spec §8.3 still wants `NoteList`, `ShareToggle`,
-  `DeleteNoteButton`, `PublicNoteViewer` (`NoteContent` is most of the last one).
+- **`components/`** — holds `AuthForm`, `LogoutButton`, `Header`, `NoteForm`,
+  `NoteEditor`, `NoteContent`, `NoteList`, `DeleteNoteButton`. Of spec §8.3 only
+  `ShareToggle` is left; `PublicNoteViewer` is essentially `NoteContent` already.
 - **`middleware.ts`** — no optimistic cookie gate yet.
-- **Real content on `/p/[slug]`**, and the dashboard's notes list (still a placeholder —
-  `getNotesByUser` is the missing piece).
+- **Real content on `/p/[slug]`.** The dashboard list is **built** (`NoteList` +
+  `getNotesByUser`), so this is the last page still showing placeholder markup.
 - **Public sharing.** `ShareToggle`, `setNotePublic`, `getNoteByPublicSlug`, and real
   content on `/p/[slug]` — the last unbuilt feature from spec §3.3.
 
@@ -128,6 +127,29 @@ still allowlists `bun run …` from earlier sessions; that is history, not guida
   `npx eslint . --max-warnings=0` (exits **1**) when unused code must actually fail.
   `eslint --fix` will **not** remove them either: the rule is not auto-fixable and no
   `unused-imports` plugin is installed, so every removal is a manual edit.
+- **Quote style is enforced by a hook, not by convention.** **Single quotes for JS/TS
+  string literals; double quotes stay in JSX attributes.** The whole repo was converted in
+  one pass (291 violations across 16 files), so the gates are green — do not "fix" a file
+  back to double quotes.
+  - `eslint.config.mjs` carries `quotes: ['error', 'single', { avoidEscape: true }]`, so it
+    is a lint **error** and part of every gate. Two behaviours to know: JSX attributes are
+    governed by `jsx-quotes`, not this rule, so `className="…"` correctly stays double; and
+    `avoidEscape` leaves `"it's fine"` and `"updated_at = datetime('now')"` on double
+    quotes rather than escaping them. Both verified.
+  - `.claude/settings.json` registers a **`PostToolUse` hook** on `Write|Edit` running
+    `.claude/hooks/enforce-single-quotes.mjs`, which autofixes the single file just
+    written. It fixes rather than nags, and **exits 2 when it changed something** — for
+    `PostToolUse` that is not a rollback, it just feeds the message back so Claude knows
+    its copy of the file is stale. Exits 0 silently for non-JS extensions and no-ops.
+  - The core `quotes` rule is deprecated in ESLint 9 in favour of
+    `@stylistic/eslint-plugin`, but it works and needs no new dependency. Revisit if
+    ESLint 10 drops it.
+  - **Two traps when testing a hook by hand on Windows**, both of which produced
+    convincing false negatives here: `$(pwd)` in Git Bash yields an MSYS path
+    (`/d/start/…`) that **Node on Windows cannot resolve**, so `existsSync` is false and
+    the hook bails silently — use `D:/start/…`; and **ESLint ignores dot-prefixed
+    directories by default**, so a probe file in `.tmp/` is never linted and nothing gets
+    fixed — put probes in a non-dot directory.
 - **`/frontend-review`** (`.claude/skills/frontend-review/`) runs a review against the
   React / accessibility / Tailwind / TypeScript practice skills in `.claude/skills/`,
   removes unused imports and dead bindings outright, and gates on the three commands
@@ -298,7 +320,7 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
   is what `NoteEditor.tsx` does.
 - **A TipTap editor contributes nothing to `FormData`.** It is a contenteditable, not a
   form control, so there is no `name` for the browser to serialise and a `<form action>`
-  would post the title alone. `NewNoteForm.tsx` holds the latest document in a **ref**
+  would post the title alone. `NoteForm.tsx` holds the latest document in a **ref**
   (not state — the editor fires on every keystroke and none of it changes what renders)
   and does `formData.set("contentJson", JSON.stringify(doc))` inside `onSubmit`.
 - **Toolbar buttons must carry `type="button"`.** Inside a `<form>` a bare `<button>`
