@@ -33,16 +33,23 @@ data layer for notes, the API routes, and all of the UI.
 | `app/api/auth/[...all]/route.ts` | better-auth handler via `toNextJsHandler`. |
 | `app/authenticate/page.tsx` | Server component. Reads `?mode=signup` (anything else = login), redirects a live session to `/dashboard`, renders `AuthForm` + the mode-toggle `Link`. `generateMetadata` retitles per mode. |
 | `components/AuthForm.tsx` | Client component. Email+password sign-in / sign-up against `lib/auth-client.ts`, uncontrolled inputs, `router.push("/dashboard")` on success. |
-| `app/dashboard/page.tsx` | Server component, **gated in the route itself** (not a layout): `getSession` → `redirect("/authenticate")` when absent. Renders `Header` (with `LogoutButton` in its actions slot), the email, and a **"New Note"** link to `/notes/new`. Notes list still a placeholder. |
+| `app/dashboard/page.tsx` | Server component, **gated in the route itself** (not a layout): `getSession` → `redirect("/authenticate")` when absent. Renders `Header` (with `LogoutButton` in its actions slot), the note count + email, a **"New Note"** link, and the notes list via `NoteList` — or an empty state with a "Create your first note" CTA. |
 | `components/LogoutButton.tsx` | Client component. `useTransition` + `signOut()`, then `router.push("/authenticate")` and `router.refresh()`. Now an inline pill so it can sit in `Header`'s `actions` slot — the old `absolute top-[50px] right-[200px] size-[100px]` box collided with the sticky header. |
 | `components/Header.tsx` | Server component. "NextNotes" wordmark linking to `/dashboard` via `next/link`, plus an optional `actions` slot for page-owned controls. Deliberately **not** mounted in `app/layout.tsx` — see the gotcha below. |
 | `app/notes/new/page.tsx` | Server component, session-gated exactly like the dashboard. Renders `Header`, a back link, and `NewNoteForm`. |
 | `app/notes/new/actions.ts` | `"use server"`. `createNoteAction(formData)` — re-checks the session, zod-validates the title and the TipTap JSON, calls `createNote`, `revalidatePath("/dashboard")`, then `redirect("/notes/<id>")`. Returns `{ error }` only when it declines to save. |
 | `components/NewNoteForm.tsx` | Client component. Uncontrolled title input + `NoteEditor`. A plain `onSubmit` attaches the editor's JSON to `FormData` and calls the action directly. |
-| `components/NoteEditor.tsx` | Client component. TipTap v3 `useEditor` + `EditorContent`, with a formatting toolbar driven by `useEditorState`. |
-| `app/notes/[id]/page.tsx` | Server component, session-gated, renders `Header`, the note **title** as the `h1`, the UTC `updated_at`, and the body via `NoteContent`. `generateMetadata` retitles the tab. `notFound()` when the id is not this user's. |
-| `components/NoteContent.tsx` | Client component. Read-only TipTap (`editable: false`) for a stored document. |
-| `lib/notes.ts` | Data layer. `Note` type, the snake_case→camelCase row mapper, `EMPTY_DOC_JSON`, `createNote`, `getNoteById`. Verified against the live DB (insert, trim, defaults, ownership, cleanup). |
+| `lib/tiptap.ts` | **Single source of truth for the note schema.** `HEADING_LEVELS` (`[1,2,3]`), `EMPTY_DOC`, and `noteExtensions()`. Both the editor and the read-only viewer call it, so their schemas cannot drift. |
+| `components/NoteEditor.tsx` | Client component. TipTap v3 `useEditor` + `EditorContent`, plus the full **SPEC.MD §9.2 toolbar**: a Normal/H1/H2/H3 segmented group, then Bold, Italic, inline code, bullet list, code block, horizontal rule, undo, redo. Active state comes from `useEditorState`; every button carries its keyboard shortcut in `title` *and* `aria-label`. |
+| `app/notes/[id]/page.tsx` | Server component, session-gated. **This is the editor**, per SPEC §8.1 — renders `Header`, a **Back** link to `/dashboard`, `DeleteNoteButton`, the note title as the `h1`, the UTC `updated_at`, and an editable `NoteForm` seeded with the stored title and document. `generateMetadata` retitles the tab. `notFound()` when the id is not this user's. |
+| `app/notes/[id]/actions.ts` | `"use server"`. `updateNoteAction(noteId, formData)` — validates, calls `updateNote`, revalidates both paths, and **returns without redirecting** so the user stays in the editor. `deleteNoteAction(noteId)` — calls `deleteNote`, then `redirect("/dashboard")`. Both re-check the session. |
+| `lib/note-schema.ts` | Shared zod validation (`NoteInputSchema`, `parseNoteInput`, `MAX_TITLE_LENGTH`) used by **both** the create and update actions so they cannot drift. Imports zod, so it is server-only — `NoteForm` keeps its own title-length constant rather than pulling zod into the client bundle. |
+| `components/NoteForm.tsx` | Client component. **One form for both create and edit** — `noteId` present means edit. Uncontrolled title + `NoteEditor`; a plain `onSubmit` attaches the editor JSON to `FormData`. Creating redirects; editing shows "Saved" and calls `router.refresh()` so the `h1` and timestamp resync. Replaced `NewNoteForm.tsx`, which is deleted. |
+| `components/NoteContent.tsx` | Client component. Read-only TipTap (`editable: false`) for a stored document. **Currently has no call sites** — `/notes/[id]` became the editor. Kept deliberately for `/p/[slug]` (spec §8.3 `PublicNoteViewer`): it encodes the fact that `generateHTML` cannot run server-side here. Do not "clean it up". |
+| `components/NoteList.tsx` | Server component. SPEC §8.3 shape (`{ id, title, updatedAt, isPublic }[]`) — a `ul`/`li` of `Link`s to `/notes/[id]`, with the timestamp and a "Public" badge. |
+| `components/DeleteNoteButton.tsx` | Client component. Confirms via a native `<dialog>` + `showModal()` (focus trap, Esc, inert background for free), then calls `deleteNoteAction`. |
+| `lib/format.ts` | `formatTimestamp` — SQLite's `datetime('now')` is UTC with a space separator, so it needs `T`/`Z` before `Date` parses it as UTC. Locale and zone are pinned so server environment cannot change the output. Shared by the note page and the list. |
+| `lib/notes.ts` | Data layer. `Note` type, the snake_case→camelCase row mapper, `EMPTY_DOC_JSON`, `createNote`, `getNoteById`, `getNotesByUser`, `updateNote`, `deleteNote`. All verified against the live DB (insert, trim, defaults, ordering, ownership, partial update, empty patch, double-delete, cleanup). |
 | `scripts/init-db.ts` | Creates the `notes` table + its three indexes. Guards on the `user` table existing first. |
 | `next.config.ts` | `serverExternalPackages: ["better-sqlite3"]` — already set. |
 | `.gitignore` | `.env*` with a `!.env.example` negation, and `/data/*.db*`. Both fixed. |
@@ -59,9 +66,10 @@ CTAs to `/authenticate` and `/authenticate?mode=signup`, and the target page now
 that `mode` param. `app/authenticate/page.tsx` is likewise finished, and
 `app/dashboard/page.tsx` has a real auth gate (its notes list is still a placeholder).
 
-The five client components are `AuthForm.tsx`, `LogoutButton.tsx`, `NewNoteForm.tsx`,
-`NoteEditor.tsx`, and `NoteContent.tsx` — no other file carries `"use client"`.
-`Header.tsx` is a server component (a `Link` needs no client boundary). The auth pair
+The six client components are `AuthForm.tsx`, `LogoutButton.tsx`, `NoteForm.tsx`,
+`NoteEditor.tsx`, `NoteContent.tsx`, and `DeleteNoteButton.tsx` — no other file carries
+`"use client"`. `Header.tsx` and `NoteList.tsx` are server components (a `Link` needs no
+client boundary). The auth pair
 consume `signIn` / `signUp` / `signOut` from `lib/auth-client.ts`; **`useSession` is the
 last dead export**, with no call sites.
 
@@ -77,9 +85,10 @@ for `/p/[slug]` (§8.1); for the first two it is simply a choice, easily changed
 
 ### Not created yet
 
-- **The rest of `lib/notes.ts`.** `createNote` and `getNoteById` are written; still
-  missing are `getNotesByUser`, `updateNote`, `deleteNote`, `setNotePublic`,
-  `getNoteByPublicSlug`. The signatures are in `SPEC.MD` **§6.2** (not §6.4 — an earlier
+- **The rest of `lib/notes.ts`.** `createNote`, `getNoteById`, `getNotesByUser`,
+  `updateNote` and `deleteNote` are written; still missing are `setNotePublic` and
+  `getNoteByPublicSlug` — i.e. only public sharing is left. The signatures are in
+  `SPEC.MD` **§6.2** (not §6.4 — an earlier
   version of this file cited the wrong section *and* the wrong names: the spec says
   `getNotesByUser` / `getNoteById`, never `listNotes` / `getNote`). Follow the spec's
   names. Note the spec types them `Promise<Note>`; `createNote` is deliberately
@@ -93,8 +102,8 @@ for `/p/[slug]` (§8.1); for the first two it is simply a choice, easily changed
 - **`middleware.ts`** — no optimistic cookie gate yet.
 - **Real content on `/p/[slug]`**, and the dashboard's notes list (still a placeholder —
   `getNotesByUser` is the missing piece).
-- **Editing an existing note.** `/notes/[id]` is read-only; there is no save-back path,
-  so `updateNote` and a writable editor are still to come.
+- **Public sharing.** `ShareToggle`, `setNotePublic`, `getNoteByPublicSlug`, and real
+  content on `/p/[slug]` — the last unbuilt feature from spec §3.3.
 
 ## Commands
 
@@ -113,6 +122,16 @@ still allowlists `bun run …` from earlier sessions; that is history, not guida
 | Create `notes` table | `npm run db:init` |
 
 - `npm run lint` invokes bare `eslint`, not `next lint` — Next.js 16 removed `next lint`.
+- **`npm run lint` exits 0 with unused imports present.** `eslint-config-next` sets
+  `@typescript-eslint/no-unused-vars` to *warn*, and bare `eslint` only fails on errors —
+  measured: a file with three unused imports reports 4 warnings and still exits **0**. Use
+  `npx eslint . --max-warnings=0` (exits **1**) when unused code must actually fail.
+  `eslint --fix` will **not** remove them either: the rule is not auto-fixable and no
+  `unused-imports` plugin is installed, so every removal is a manual edit.
+- **`/frontend-review`** (`.claude/skills/frontend-review/`) runs a review against the
+  React / accessibility / Tailwind / TypeScript practice skills in `.claude/skills/`,
+  removes unused imports and dead bindings outright, and gates on the three commands
+  above. Prefer it over an ad-hoc review so the practice skills actually get loaded.
 - `db:auth` must run before `db:init`; `notes.user_id` references `user(id)`.
 - **`db:auth` currently invokes the wrong package.** `package.json` runs
   `npx @better-auth/cli@latest migrate`, but that name is superseded — its `latest` is
@@ -151,7 +170,10 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
   `listKeymap`, `orderedList`, `paragraph`, `strike`, `text`, `trailingNode`,
   `underline`, `undoRedo`. (`Link`, `Underline`, `ListKeymap` and `TrailingNode` are new
   in v3.) Passing any of them alongside `StarterKit` registers them twice and TipTap warns
-  about duplicates — `components/NoteEditor.tsx` therefore passes `StarterKit` alone.
+  about duplicates — `lib/tiptap.ts` therefore passes `StarterKit` alone. The spec's
+  `heading: { levels: [1, 2, 3] }` **is** honoured (§1 wants H1–H3), so a note body can
+  contain an `h1` alongside the page's own title `h1`. Slightly odd for a document
+  outline; it is what the spec asks for.
   Those names are also the `StarterKit.configure({...})` keys; set one to `false` to drop
   it before adding a replacement (e.g. `codeBlock: false` + `CodeBlockLowlight`).
 - **§8.2 "Header with app name … in the global layout"** — the header exists as
@@ -205,7 +227,22 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
   `undefined` **silently binds NULL**. That bites exactly the payloads spec §7.2
   specifies. Still coerce at the boundary — `isPublic ? 1 : 0`, `JSON.stringify(...)`, and
   build the `SET` clause from only the keys actually present rather than passing
-  `undefined` for absent ones.
+  `undefined` for absent ones. `updateNote` does exactly that, and it is not theoretical:
+  a fixed `SET title = ?, content_json = ?` would blank whichever field the caller
+  omitted — loudly for `title` (`NOT NULL`) and **silently** for `content_json`. Both
+  partial-update paths are covered by a probe, including the empty-patch case, which must
+  be a no-op that does not even touch `updated_at`.
+- **SQLite orders TEXT by `BINARY` collation; JS `localeCompare` does not.** Cost a false
+  test failure while verifying `getNotesByUser`: `ORDER BY updated_at DESC, id DESC` was
+  correct, but the assertion re-sorted with `localeCompare`, which is locale-aware and
+  disagrees with byte order on the mixed-case nanoid ids. Compare with `<`/`>` (UTF-16
+  code units, equivalent to `BINARY` for ASCII) when asserting SQL ordering in JS.
+  The `id` tie-break itself is load-bearing: `datetime('now')` has one-second resolution,
+  so notes created in quick succession share `updated_at` and would otherwise come back in
+  an order that can shuffle between requests.
+- **A Server Action can live in a bracketed route folder and be imported normally.**
+  `import { deleteNoteAction } from "@/app/notes/[id]/actions"` resolves under both `tsc`
+  and Turbopack — the `[id]` segment in the path is not a problem. Verified.
 - **`lib/notes.ts` imports `./db.ts` *with* the extension, on purpose.** Extensionless
   relative imports resolve under Turbopack but **not** under Node's type stripping, so an
   extensionless `./db` makes the whole module unimportable from `scripts/*.ts` — that is a
@@ -271,6 +308,31 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
   under `.tiptap-content`, the class applied via `editorProps.attributes.class`. Both
   `NoteEditor` and `NoteContent` use that class, so stored notes look the same being
   written and being read.
+- **Tailwind v4 Preflight flattens every heading** — it emits
+  `h1,h2,h3,h4,h5,h6 { font-size: inherit; font-weight: inherit }`. So a heading with no
+  explicit rule renders at *body text size* and looks like the command did nothing. Every
+  level in `HEADING_LEVELS` needs a matching `.tiptap-content hN` rule in
+  `app/globals.css`, or that toolbar button appears broken while working correctly.
+- **Turbopack dev can serve stale CSS while happily hot-reloading the JS, and a plain
+  restart does NOT clear it.** Hit for real: a new `.tiptap-content h1` rule was on disk
+  and correct in the production build, but the dev chunk emitted
+  `.tiptap-content h2, .tiptap-content h3 { … }` — `h1` stripped from the group and its
+  standalone block missing, i.e. byte-for-byte the *pre-edit* source. Because Tailwind
+  Preflight flattens headings, H1 then looked completely dead in the editor while H2/H3
+  worked. Diagnosis recipe:
+
+  ```bash
+  # what dev serves vs what the source really compiles to
+  grep -rn "tiptap-content h" .next/dev/static/chunks/*.css
+  npm run build && grep -o "\.tiptap-content h[0-9][^{]*{[^}]*}" .next/static/chunks/*.css
+  ```
+
+  If they disagree, the source is fine and the cache is poisoned. **Ctrl+C then
+  `npm run dev` is not enough** — the cache lives in `.next/`, so delete it:
+  `rm -rf .next` (or at minimum `.next/dev`) and start the dev server again.
+  Note the dev CSS is unminified, so rules span lines — a single-line
+  `grep -o '…{[^}]*}'` silently matches nothing there and looks like the rule is absent
+  when it is merely wrapped.
 - **`generateHTML` from `@tiptap/core` does NOT work server-side here.** It goes through
   ProseMirror's `DOMSerializer` and throws `ReferenceError: window is not defined` under
   the Node runtime — verified directly. Rendering stored notes to HTML on the server would
@@ -279,9 +341,18 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
   come from the schema, so a stored document cannot inject anything the extensions do not
   allow. Keep it that way if `/p/[slug]` gets built — it renders untrusted content to
   anonymous visitors.
-- **Read-only and editable views must share the same extension config.** `NoteContent`
-  repeats `heading: { levels: [2, 3] }` on purpose: a schema mismatch silently drops nodes
-  the stored document actually contains.
+- **Read-only and editable views must share the same extension config**, which is why
+  `lib/tiptap.ts` exists and why `NoteEditor` and `NoteContent` both call
+  `noteExtensions()` instead of configuring StarterKit themselves. A mismatch silently
+  drops nodes the stored document actually contains — an H1 written under
+  `levels: [1,2,3]` simply vanishes in a viewer built with `[2,3]`. Never inline a
+  StarterKit config in a component again.
+- **`heading.levels` is an *input* restriction, not a validation boundary.** Measured
+  against the real schema: with `levels: [1,2,3]`, a stored document containing
+  `heading` level **4 still parses** via `Node.fromJSON` — the config governs which
+  commands and keyboard shortcuts exist and what HTML parsing accepts, but ProseMirror's
+  `level` attribute is unconstrained. So do not rely on it to reject anything; the
+  toolbar and the zod check in the Server Action are what actually bound what gets in.
 - **Content is not in the server-rendered HTML.** `immediatelyRender: false` means the
   read-only view renders a "Loading content…" placeholder server-side and fills in after
   hydration. The document JSON *is* in the RSC payload, so nothing extra is fetched, but

@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useState, type ComponentProps, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import { signIn, signUp } from "@/lib/auth-client";
+import { useState, type ComponentProps, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { signIn, signUp } from '@/lib/auth-client';
 
-export type AuthMode = "login" | "signup";
+export type AuthMode = 'login' | 'signup';
 
 /** better-auth resolves to `{ data, error }`; `error.code` is a stable machine string. */
 type AuthError = { code?: string; message?: string };
@@ -17,15 +17,15 @@ type FormError = { mode: AuthMode; message: string };
 
 const ERROR_MESSAGES: Record<string, string | undefined> = {
   INVALID_EMAIL_OR_PASSWORD: "That email and password don't match an account.",
-  USER_ALREADY_EXISTS: "An account with that email already exists — log in instead.",
+  USER_ALREADY_EXISTS: 'An account with that email already exists — log in instead.',
   USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-    "An account with that email already exists — log in instead.",
-  PASSWORD_TOO_SHORT: "Password must be at least 8 characters.",
-  PASSWORD_TOO_LONG: "Password must be 128 characters or fewer.",
-  INVALID_EMAIL: "Enter a valid email address.",
+    'An account with that email already exists — log in instead.',
+  PASSWORD_TOO_SHORT: 'Password must be at least 8 characters.',
+  PASSWORD_TOO_LONG: 'Password must be 128 characters or fewer.',
+  INVALID_EMAIL: 'Enter a valid email address.',
 };
 
-const FALLBACK_MESSAGE = "Something went wrong. Please try again.";
+const FALLBACK_MESSAGE = 'Something went wrong. Please try again.';
 
 function messageFor({ code, message }: AuthError) {
   return (code ? ERROR_MESSAGES[code] : undefined) ?? message ?? FALLBACK_MESSAGE;
@@ -36,7 +36,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
 
-  const isSignup = mode === "signup";
+  const isSignup = mode === 'signup';
   const message = error?.mode === mode ? error.message : null;
 
   /**
@@ -49,8 +49,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     if (pending) return;
 
     const fields = new FormData(event.currentTarget);
-    const email = String(fields.get("email"));
-    const password = String(fields.get("password"));
+    const email = String(fields.get('email'));
+    const password = String(fields.get('password'));
 
     setPending(true);
     setError(null);
@@ -59,7 +59,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     // VALIDATION_ERROR — but an empty string is accepted. We collect nothing beyond
     // email and password, so nothing is sent and nothing derived is stored.
     const { error: authError } = isSignup
-      ? await signUp.email({ name: "", email, password })
+      ? await signUp.email({ name: '', email, password })
       : await signIn.email({ email, password });
 
     if (authError) {
@@ -71,14 +71,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     // The sign-in response carries the session cookie, so the RSC request for
     // /dashboard already sees it — a route change needs no router.refresh().
     // `pending` stays true so the form cannot be resubmitted mid-navigation.
-    router.push("/dashboard");
+    router.push('/dashboard');
   }
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
       <fieldset disabled={pending} className="flex flex-col gap-4">
         <legend className="sr-only">
-          {isSignup ? "Account details" : "Login details"}
+          {isSignup ? 'Account details' : 'Login details'}
         </legend>
 
         <Field id="email" label="Email" type="email" autoComplete="email" />
@@ -87,10 +87,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           id="password"
           label="Password"
           type="password"
-          autoComplete={isSignup ? "new-password" : "current-password"}
+          autoComplete={isSignup ? 'new-password' : 'current-password'}
           minLength={isSignup ? 8 : undefined}
           maxLength={128}
-          hint={isSignup ? "At least 8 characters." : undefined}
+          hint={isSignup ? 'At least 8 characters.' : undefined}
         />
       </fieldset>
 
@@ -110,17 +110,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       >
         {pending
           ? isSignup
-            ? "Creating account…"
-            : "Logging in…"
+            ? 'Creating account…'
+            : 'Logging in…'
           : isSignup
-            ? "Create account"
-            : "Log in"}
+            ? 'Create account'
+            : 'Log in'}
       </button>
     </form>
   );
 }
 
-type FieldProps = ComponentProps<"input"> & {
+type FieldProps = ComponentProps<'input'> & {
   id: string;
   label: string;
   hint?: string;

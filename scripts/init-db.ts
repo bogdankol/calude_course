@@ -4,18 +4,18 @@
  *
  *   npm run db:init
  */
-import { getDb } from "../lib/db.ts";
+import { getDb } from '../lib/db.ts';
 
 const db = getDb();
 
 const authTableExists = db
-  .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user'`)
+  .prepare('SELECT name FROM sqlite_master WHERE type = \'table\' AND name = \'user\'')
   .get();
 
 if (!authTableExists) {
   console.error(
     'Missing the better-auth "user" table. Run `npm run db:auth` first — ' +
-      "notes.user_id references user(id).",
+      'notes.user_id references user(id).',
   );
   process.exit(1);
 }
@@ -45,6 +45,6 @@ const tables = db
   .all()
   .map((row) => (row as { name: string }).name);
 
-console.log("journal_mode:", db.pragma("journal_mode", { simple: true }));
-console.log("foreign_keys:", db.pragma("foreign_keys", { simple: true }));
-console.log("tables:", tables.join(", "));
+console.log('journal_mode:', db.pragma('journal_mode', { simple: true }));
+console.log('foreign_keys:', db.pragma('foreign_keys', { simple: true }));
+console.log('tables:', tables.join(', '));

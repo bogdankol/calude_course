@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:auth": "npx @better-auth/cli@latest migrate",
-    "db:init": "node --env-file=.env scripts/init-db.ts"
+    "db:init": "node --env-file=.env scripts/init-db.ts",
+    "format": "oxfmt"
   },
   "engines": {
     "node": ">=20"
@@ -22,6 +23,7 @@
     "better-sqlite3": "^12.11.1",
     "nanoid": "^6.0.0",
     "next": "16.1.1",
+    "oxfmt": "^0.65.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zod": "^4.4.3"

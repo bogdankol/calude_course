@@ -1,26 +1,27 @@
-import type { Metadata } from "next";
-import type { JSX } from "react";
-import Link from "next/link";
-import { headers } from "next/headers";
-import { notFound, redirect } from "next/navigation";
-import type { JSONContent } from "@tiptap/core";
-import { auth } from "@/lib/auth";
-import { getNoteById } from "@/lib/notes";
-import { Header } from "@/components/Header";
-import { LogoutButton } from "@/components/LogoutButton";
-import { NoteContent } from "@/components/NoteContent";
-
-const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
+import type { Metadata } from 'next';
+import type { JSX } from 'react';
+import Link from 'next/link';
+import { headers } from 'next/headers';
+import { notFound, redirect } from 'next/navigation';
+import type { JSONContent } from '@tiptap/core';
+import { auth } from '@/lib/auth';
+import { getNoteById } from '@/lib/notes';
+import { EMPTY_DOC } from '@/lib/tiptap';
+import { formatTimestamp } from '@/lib/format';
+import { Header } from '@/components/Header';
+import { LogoutButton } from '@/components/LogoutButton';
+import { NoteForm } from '@/components/NoteForm';
+import { DeleteNoteButton } from '@/components/DeleteNoteButton';
 
 type NotePageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: NotePageProps): Promise<Metadata> {
   const { id } = await params;
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { title: "Note · NextNotes" };
+  if (!session) return { title: 'Note · NextNotes' };
 
   const note = getNoteById(session.user.id, id);
-  return { title: note ? `${note.title} · NextNotes` : "Note not found · NextNotes" };
+  return { title: note ? `${note.title} · NextNotes` : 'Note not found · NextNotes' };
 }
 
 export default async function NotePage({ params }: NotePageProps): Promise<JSX.Element> {
@@ -29,7 +30,7 @@ export default async function NotePage({ params }: NotePageProps): Promise<JSX.E
 
   // This page had no gate at all and answered 200 to anonymous requests.
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/authenticate");
+  if (!session) redirect('/authenticate');
 
   // Ownership is enforced in the query, so someone else's note id is simply "not found".
   const note = getNoteById(session.user.id, id);
@@ -40,14 +41,18 @@ export default async function NotePage({ params }: NotePageProps): Promise<JSX.E
       <Header actions={<LogoutButton />} />
 
       <main className="mx-auto w-full max-w-3xl px-6 py-10">
-        <nav className="mb-6">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/dashboard"
-            className="-mx-1.5 rounded px-1.5 py-1 text-sm text-neutral-400 transition-colors hover:text-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
           >
-            ← Back to notes
+            <span aria-hidden>←</span> Back
           </Link>
-        </nav>
+
+          <div className="flex items-center gap-3">
+            <DeleteNoteButton noteId={note.id} noteTitle={note.title} />
+          </div>
+        </div>
 
         <article>
           <header>
@@ -64,9 +69,16 @@ export default async function NotePage({ params }: NotePageProps): Promise<JSX.E
             </p>
           </header>
 
-          <div className="mt-8 border-t border-white/10 pt-6">
-            <NoteContent doc={parseDoc(note.contentJson)} />
-          </div>
+          {/*
+            SPEC.MD §8.1 makes /notes/[id] the editor, so the body is the editable form.
+            The h1 above still shows the stored title — `router.refresh()` after a save
+            brings it back in sync.
+          */}
+          <NoteForm
+            noteId={note.id}
+            initialTitle={note.title}
+            initialDoc={parseDoc(note.contentJson)}
+          />
         </article>
       </main>
     </>
@@ -81,9 +93,9 @@ function parseDoc(contentJson: string): JSONContent {
   try {
     const parsed: unknown = JSON.parse(contentJson);
     if (
-      typeof parsed === "object" &&
+      typeof parsed === 'object' &&
       parsed !== null &&
-      (parsed as { type?: unknown }).type === "doc"
+      (parsed as { type?: unknown }).type === 'doc'
     ) {
       return parsed as JSONContent;
     }
@@ -91,17 +103,4 @@ function parseDoc(contentJson: string): JSONContent {
     // fall through to the empty document
   }
   return EMPTY_DOC;
-}
-
-/** SQLite writes `datetime('now')` as UTC with a space separator, not ISO-8601. */
-function formatTimestamp(sqliteUtc: string): string {
-  const date = new Date(`${sqliteUtc.replace(" ", "T")}Z`);
-  if (Number.isNaN(date.getTime())) return sqliteUtc;
-
-  // Fixed locale and zone so the server's environment can't change the output.
-  return `${new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(date)} UTC`;
 }

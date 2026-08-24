@@ -1,8 +1,8 @@
-import { nanoid } from "nanoid";
+import { nanoid } from 'nanoid';
 // Explicit .ts extension so this module can also be imported from `scripts/*.ts`, which
 // run through Node's type stripping and will not resolve an extensionless relative path.
 // Turbopack and tsc both accept it (`allowImportingTsExtensions` is on, `noEmit` is set).
-import { get, type SqlParam } from "./db.ts";
+import { get, query, run, type SqlParam } from './db.ts';
 
 /**
  * Application view of a row in `notes`. The table is snake_case; this is camelCase, and
@@ -33,12 +33,12 @@ type NoteRow = {
 };
 
 const NOTE_COLUMNS =
-  "id, user_id, title, content_json, is_public, public_slug, created_at, updated_at";
+  'id, user_id, title, content_json, is_public, public_slug, created_at, updated_at';
 
 /** What TipTap produces for an untouched editor, and what an empty note stores. */
 export const EMPTY_DOC_JSON = '{"type":"doc","content":[{"type":"paragraph"}]}';
 
-const DEFAULT_TITLE = "Untitled note";
+const DEFAULT_TITLE = 'Untitled note';
 
 function toNote(row: NoteRow): Note {
   return {
@@ -81,7 +81,7 @@ export function createNote(
 
   // Unreachable: an INSERT ... RETURNING that inserts a row always yields one, and a
   // failure throws rather than returning nothing. Narrowing the type is the point.
-  if (!row) throw new Error("createNote: insert returned no row");
+  if (!row) throw new Error('createNote: insert returned no row');
 
   return toNote(row);
 }
@@ -100,4 +100,73 @@ export function getNoteById(userId: string, noteId: string): Note | null {
   );
 
   return row ? toNote(row) : null;
+}
+
+/**
+ * Every note owned by `userId`, most recently updated first — the order the dashboard
+ * lists them in.
+ *
+ * The `id` tie-break matters: `datetime('now')` has one-second resolution, so notes
+ * created in quick succession share an `updated_at` and would otherwise come back in an
+ * arbitrary order that could shuffle between requests.
+ */
+export function getNotesByUser(userId: string): Note[] {
+  return query<NoteRow>(
+    `SELECT ${NOTE_COLUMNS} FROM notes
+      WHERE user_id = ?
+      ORDER BY updated_at DESC, id DESC`,
+    [userId],
+  ).map(toNote);
+}
+
+/**
+ * Updates the title and/or body of one of `userId`'s notes and returns the stored row,
+ * or null when the note is not theirs.
+ *
+ * Only the keys actually present in `data` reach the SQL. That matters more than it
+ * looks: better-sqlite3 binds `undefined` as NULL, so a fixed
+ * `SET title = ?, content_json = ?` would blank whichever field the caller omitted —
+ * and `title` is `NOT NULL`, so it would fail loudly while `content_json` fails quietly.
+ */
+export function updateNote(
+  userId: string,
+  noteId: string,
+  data: Partial<{ title: string; contentJson: string }>,
+): Note | null {
+  const assignments: string[] = [];
+  const params: SqlParam[] = [];
+
+  if (data.title !== undefined) {
+    assignments.push('title = ?');
+    params.push(data.title);
+  }
+  if (data.contentJson !== undefined) {
+    assignments.push('content_json = ?');
+    params.push(data.contentJson);
+  }
+
+  // Nothing to change — report the note as-is rather than touching `updated_at`.
+  if (assignments.length === 0) return getNoteById(userId, noteId);
+
+  assignments.push("updated_at = datetime('now')");
+
+  const row = get<NoteRow>(
+    `UPDATE notes SET ${assignments.join(', ')}
+      WHERE id = ? AND user_id = ?
+      RETURNING ${NOTE_COLUMNS}`,
+    [...params, noteId, userId],
+  );
+
+  return row ? toNote(row) : null;
+}
+
+/**
+ * Hard-deletes a note, scoped to its owner — another user's id deletes nothing rather
+ * than erroring, so the ownership check cannot be forgotten at a call site.
+ *
+ * Returns whether a row actually went away. SPEC.MD §6.2 types this `void`, but a bare
+ * void would force callers into a second query just to tell "deleted" from "not yours".
+ */
+export function deleteNote(userId: string, noteId: string): boolean {
+  return run('DELETE FROM notes WHERE id = ? AND user_id = ?', [noteId, userId]).changes > 0;
 }

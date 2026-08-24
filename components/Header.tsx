@@ -1,5 +1,5 @@
-import Link from "next/link";
-import type { JSX, ReactNode } from "react";
+import Link from 'next/link';
+import type { JSX, ReactNode } from 'react';
 
 /**
  * App header. Deliberately not mounted in `app/layout.tsx`: the brand links to

@@ -1,15 +1,15 @@
-import type { Metadata } from "next";
-import type { JSX } from "react";
-import Link from "next/link";
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import { Header } from "@/components/Header";
-import { LogoutButton } from "@/components/LogoutButton";
-import { NewNoteForm } from "@/components/NewNoteForm";
+import type { Metadata } from 'next';
+import type { JSX } from 'react';
+import Link from 'next/link';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { auth } from '@/lib/auth';
+import { Header } from '@/components/Header';
+import { LogoutButton } from '@/components/LogoutButton';
+import { NoteForm } from '@/components/NoteForm';
 
 export const metadata: Metadata = {
-  title: "New note · NextNotes",
+  title: 'New note · NextNotes',
 };
 
 /**
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
  */
 export default async function NewNotePage(): Promise<JSX.Element> {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/authenticate");
+  if (!session) redirect('/authenticate');
 
   return (
     <>
@@ -39,7 +39,7 @@ export default async function NewNotePage(): Promise<JSX.Element> {
           Give it a title, write something, and save.
         </p>
 
-        <NewNoteForm />
+        <NoteForm />
       </main>
     </>
   );
