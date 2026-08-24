@@ -23,7 +23,7 @@ export function LogoutButton(): JSX.Element {
       type="button"
       onClick={handleLogout}
       disabled={isPending}
-      className="absolute top-[50px] right-[200px] flex size-[100px] items-center justify-center p-2 text-center text-sm leading-tight font-medium text-neutral-200 rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+      className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {isPending ? "Logging out…" : "Log out"}
     </button>

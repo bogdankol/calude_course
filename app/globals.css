@@ -17,3 +17,118 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * Note editor content.
+ *
+ * TipTap is headless — it ships no visual theme, and its own `.tiptap` class is the
+ * documented hook for scoping content styles. `@tailwindcss/typography` is not installed,
+ * so there is no `prose` to lean on and the document styles live here. The class comes
+ * from `editorProps.attributes.class` in `components/NoteEditor.tsx`.
+ */
+.tiptap-content {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--foreground);
+}
+
+.tiptap-content > :first-child {
+  margin-top: 0;
+}
+
+.tiptap-content > :last-child {
+  margin-bottom: 0;
+}
+
+.tiptap-content p {
+  margin: 0.75em 0;
+}
+
+.tiptap-content h2,
+.tiptap-content h3 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.4em 0 0.5em;
+}
+
+.tiptap-content h2 {
+  font-size: 1.35em;
+  letter-spacing: -0.01em;
+}
+
+.tiptap-content h3 {
+  font-size: 1.15em;
+}
+
+.tiptap-content ul,
+.tiptap-content ol {
+  margin: 0.75em 0;
+  padding-left: 1.5em;
+}
+
+.tiptap-content ul {
+  list-style: disc;
+}
+
+.tiptap-content ol {
+  list-style: decimal;
+}
+
+.tiptap-content li {
+  margin: 0.25em 0;
+}
+
+.tiptap-content li > p {
+  margin: 0;
+}
+
+.tiptap-content blockquote {
+  margin: 1em 0;
+  border-left: 3px solid oklch(1 0 0 / 20%);
+  padding-left: 1em;
+  color: oklch(1 0 0 / 65%);
+}
+
+.tiptap-content a {
+  color: oklch(0.75 0.11 250);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tiptap-content code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875em;
+  background: oklch(1 0 0 / 10%);
+  border-radius: 0.25rem;
+  padding: 0.15em 0.35em;
+}
+
+.tiptap-content pre {
+  margin: 1em 0;
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  background: oklch(0 0 0 / 45%);
+  padding: 0.85em 1em;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875em;
+  line-height: 1.6;
+}
+
+/* The <code> inside a code block must not inherit the inline-code chip styling. */
+.tiptap-content pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.tiptap-content hr {
+  margin: 1.5em 0;
+  border: 0;
+  border-top: 1px solid oklch(1 0 0 / 15%);
+}
+
+/* ProseMirror's own selection class — the browser default is invisible on this ground. */
+.tiptap-content .ProseMirror-selectednode {
+  outline: 2px solid oklch(0.65 0.09 250);
+  border-radius: 0.25rem;
+}

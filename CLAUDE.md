@@ -33,8 +33,16 @@ data layer for notes, the API routes, and all of the UI.
 | `app/api/auth/[...all]/route.ts` | better-auth handler via `toNextJsHandler`. |
 | `app/authenticate/page.tsx` | Server component. Reads `?mode=signup` (anything else = login), redirects a live session to `/dashboard`, renders `AuthForm` + the mode-toggle `Link`. `generateMetadata` retitles per mode. |
 | `components/AuthForm.tsx` | Client component. Email+password sign-in / sign-up against `lib/auth-client.ts`, uncontrolled inputs, `router.push("/dashboard")` on success. |
-| `app/dashboard/page.tsx` | Server component, **gated in the route itself** (not a layout): `getSession` → `redirect("/authenticate")` when absent. Renders the email and `LogoutButton`. Notes list still a placeholder. |
-| `components/LogoutButton.tsx` | Client component. `useTransition` + `signOut()`, then `router.push("/authenticate")` and `router.refresh()`. Absolutely positioned at `top-[50px] right-[200px]`, `size-[100px]`. |
+| `app/dashboard/page.tsx` | Server component, **gated in the route itself** (not a layout): `getSession` → `redirect("/authenticate")` when absent. Renders `Header` (with `LogoutButton` in its actions slot), the email, and a **"New Note"** link to `/notes/new`. Notes list still a placeholder. |
+| `components/LogoutButton.tsx` | Client component. `useTransition` + `signOut()`, then `router.push("/authenticate")` and `router.refresh()`. Now an inline pill so it can sit in `Header`'s `actions` slot — the old `absolute top-[50px] right-[200px] size-[100px]` box collided with the sticky header. |
+| `components/Header.tsx` | Server component. "NextNotes" wordmark linking to `/dashboard` via `next/link`, plus an optional `actions` slot for page-owned controls. Deliberately **not** mounted in `app/layout.tsx` — see the gotcha below. |
+| `app/notes/new/page.tsx` | Server component, session-gated exactly like the dashboard. Renders `Header`, a back link, and `NewNoteForm`. |
+| `app/notes/new/actions.ts` | `"use server"`. `createNoteAction(formData)` — re-checks the session, zod-validates the title and the TipTap JSON, calls `createNote`, `revalidatePath("/dashboard")`, then `redirect("/notes/<id>")`. Returns `{ error }` only when it declines to save. |
+| `components/NewNoteForm.tsx` | Client component. Uncontrolled title input + `NoteEditor`. A plain `onSubmit` attaches the editor's JSON to `FormData` and calls the action directly. |
+| `components/NoteEditor.tsx` | Client component. TipTap v3 `useEditor` + `EditorContent`, with a formatting toolbar driven by `useEditorState`. |
+| `app/notes/[id]/page.tsx` | Server component, session-gated, renders `Header`, the note **title** as the `h1`, the UTC `updated_at`, and the body via `NoteContent`. `generateMetadata` retitles the tab. `notFound()` when the id is not this user's. |
+| `components/NoteContent.tsx` | Client component. Read-only TipTap (`editable: false`) for a stored document. |
+| `lib/notes.ts` | Data layer. `Note` type, the snake_case→camelCase row mapper, `EMPTY_DOC_JSON`, `createNote`, `getNoteById`. Verified against the live DB (insert, trim, defaults, ownership, cleanup). |
 | `scripts/init-db.ts` | Creates the `notes` table + its three indexes. Guards on the `user` table existing first. |
 | `next.config.ts` | `serverExternalPackages: ["better-sqlite3"]` — already set. |
 | `.gitignore` | `.env*` with a `!.env.example` negation, and `/data/*.db*`. Both fixed. |
@@ -44,30 +52,49 @@ data layer for notes, the API routes, and all of the UI.
 
 ### Stubs — placeholder markup only, no logic
 
-`app/notes/[id]/page.tsx`, `app/p/[slug]/page.tsx`.
+`app/p/[slug]/page.tsx` — the last one.
 
 `app/page.tsx` is **not** a stub — it is a finished spec §8.1 landing page with working
 CTAs to `/authenticate` and `/authenticate?mode=signup`, and the target page now reads
 that `mode` param. `app/authenticate/page.tsx` is likewise finished, and
 `app/dashboard/page.tsx` has a real auth gate (its notes list is still a placeholder).
 
-The two client components are `components/AuthForm.tsx` and `components/LogoutButton.tsx`
-— no other file carries `"use client"`. Between them they consume `signIn` / `signUp` /
-`signOut` from `lib/auth-client.ts`; **`useSession` is the last dead export**, with no
-call sites. All five tables have 0 rows.
+The five client components are `AuthForm.tsx`, `LogoutButton.tsx`, `NewNoteForm.tsx`,
+`NoteEditor.tsx`, and `NoteContent.tsx` — no other file carries `"use client"`.
+`Header.tsx` is a server component (a `Link` needs no client boundary). The auth pair
+consume `signIn` / `signUp` / `signOut` from `lib/auth-client.ts`; **`useSession` is the
+last dead export**, with no call sites.
 
-`/authenticate` and `/dashboard` both check the session authoritatively.
-**`/notes/[id]` still answers 200 to an anonymous request** — it has no gate yet.
+`/authenticate`, `/dashboard`, `/notes/new`, and `/notes/[id]` all check the session
+authoritatively — and `createNoteAction` re-checks it too, since a Server Action is its
+own endpoint and is reachable without the page ever rendering. `/notes/[id]` additionally
+scopes its lookup by `user_id`, so another user's note id returns **404**, not the note.
+Verified live against the running app, along with the anonymous redirect.
+
+**The header is only on the authenticated pages** — `/dashboard`, `/notes/new`,
+`/notes/[id]`. `/`, `/authenticate`, and `/p/[slug]` do not render it. That is deliberate
+for `/p/[slug]` (§8.1); for the first two it is simply a choice, easily changed.
 
 ### Not created yet
 
-- **`lib/notes.ts`** — the data layer. Everything else depends on it. Signatures in
-  `SPEC.MD` §6.4: `listNotes`, `getNote`, `createNote`, `updateNote`, `deleteNote`,
-  `setNotePublic`, `getNoteByPublicSlug`.
-- **`app/api/notes/*`** — no route handlers exist.
-- **`components/`** — exists, holds `AuthForm.tsx` and `LogoutButton.tsx`. Spec §8.2
-  still wants `NoteEditor`, `NoteList`, `ShareToggle`, `PublicNoteViewer`.
+- **The rest of `lib/notes.ts`.** `createNote` and `getNoteById` are written; still
+  missing are `getNotesByUser`, `updateNote`, `deleteNote`, `setNotePublic`,
+  `getNoteByPublicSlug`. The signatures are in `SPEC.MD` **§6.2** (not §6.4 — an earlier
+  version of this file cited the wrong section *and* the wrong names: the spec says
+  `getNotesByUser` / `getNoteById`, never `listNotes` / `getNote`). Follow the spec's
+  names. Note the spec types them `Promise<Note>`; `createNote` is deliberately
+  **synchronous**, because better-sqlite3 has no async API and a promise would be pure
+  decoration — `await` on the result still works. Match that for the rest.
+- **`app/api/notes/*`** — no route handlers exist. The new-note flow goes through a
+  Server Action instead, so the API surface in spec §7.2 is still entirely unbuilt.
+- **`components/`** — holds `AuthForm`, `LogoutButton`, `Header`, `NewNoteForm`,
+  `NoteEditor`, `NoteContent`. Spec §8.3 still wants `NoteList`, `ShareToggle`,
+  `DeleteNoteButton`, `PublicNoteViewer` (`NoteContent` is most of the last one).
 - **`middleware.ts`** — no optimistic cookie gate yet.
+- **Real content on `/p/[slug]`**, and the dashboard's notes list (still a placeholder —
+  `getNotesByUser` is the missing piece).
+- **Editing an existing note.** `/notes/[id]` is read-only; there is no save-back path,
+  so `updateNote` and a writable editor are still to come.
 
 ## Commands
 
@@ -117,11 +144,22 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
 - **§10 "configure Tailwind in `tailwind.config.ts`"** — wrong. This is Tailwind v4,
   CSS-first. No `tailwind.config.ts` exists and adding one will not be read. Theme
   tokens live in `app/globals.css` under `@import "tailwindcss"` + `@theme inline`.
-- **§9.1 TipTap extension list** — wrong for the installed version. `@tiptap/starter-kit`
-  v3 already bundles `Code`, `CodeBlock`, `Link`, `Underline`, and the list extensions.
-  Passing them alongside `StarterKit` registers them twice and TipTap warns about
-  duplicates. Configure via `StarterKit.configure({...})`, or disable the bundled one
-  before adding a replacement (e.g. `CodeBlockLowlight`).
+- **§9.1 TipTap extension list** — wrong for the installed version, now **verified
+  against `@tiptap/starter-kit@3.29.2`'s own `.d.ts`**. StarterKit v3 already bundles all
+  of: `blockquote`, `bold`, `bulletList`, `code`, `codeBlock`, `document`, `dropcursor`,
+  `gapcursor`, `hardBreak`, `heading`, `horizontalRule`, `italic`, `link`, `listItem`,
+  `listKeymap`, `orderedList`, `paragraph`, `strike`, `text`, `trailingNode`,
+  `underline`, `undoRedo`. (`Link`, `Underline`, `ListKeymap` and `TrailingNode` are new
+  in v3.) Passing any of them alongside `StarterKit` registers them twice and TipTap warns
+  about duplicates — `components/NoteEditor.tsx` therefore passes `StarterKit` alone.
+  Those names are also the `StarterKit.configure({...})` keys; set one to `false` to drop
+  it before adding a replacement (e.g. `codeBlock: false` + `CodeBlockLowlight`).
+- **§8.2 "Header with app name … in the global layout"** — the header exists as
+  `components/Header.tsx` but is **not** in `app/layout.tsx`, because its wordmark links to
+  `/dashboard` and §8.1 wants no route into user-specific areas from the public
+  `/p/[slug]` page. Authenticated pages mount it themselves.
+- **§8.2 `app/(auth)/login` + `app/(auth)/register`** — never built that way; there is a
+  single `/authenticate` route switched by `?mode=`.
 - **§6.3 env var names** — already reconciled; the spec's names are what's in use.
 - **§12 steps 1–8** — scaffold, deps, DB, and auth wiring are done.
 
@@ -131,6 +169,16 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
   lives at `app/`.
 - **Next 16 async params.** Dynamic route `params` is a `Promise` and must be awaited:
   `const { slug } = await params`. Both existing dynamic pages already do this.
+- **`/notes/new` is a static segment sitting beside `/notes/[id]`.** Next resolves static
+  segments before dynamic ones, so `new` is never matched as a note id. Confirmed in the
+  build output — both routes are listed separately.
+- **`redirect()` must not be called inside a `try`.** It signals by throwing an internal
+  `NEXT_REDIRECT`, so a surrounding `catch` swallows the navigation and reports a
+  successful save as a failure. `createNoteAction` keeps both `redirect` calls outside its
+  `try`. Inside a Server Action the redirect status is **303**, not the usual 307.
+- **A Server Action is its own endpoint.** It is POST-able directly and does not inherit
+  the page's session check, so re-run `auth.api.getSession` inside the action even when
+  the page that renders the form is already gated.
 - **`allowImportingTsExtensions` is on** so `scripts/*.ts` can run through Node's type
   stripping — relative imports in `scripts/` need the explicit `.ts` extension
   (`import { getDb } from "../lib/db.ts"`). Safe because `noEmit` is set.
@@ -149,16 +197,21 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
 - **`@types/better-sqlite3@^9.6.0` against `better-sqlite3@^12.11.1` is NOT a mismatch.**
   `npm view @types/better-sqlite3 dist-tags.latest` → `9.6.0`. DefinitelyTyped does not
   track the library's major. There is no `^12` to bump to — leave it alone.
-- **`lib/db.ts`'s `query`/`get`/`run` take `unknown[]`, which type-checks values the
-  driver rejects at runtime.** better-sqlite3 binds only `number | string | bigint |
-  Buffer | null`. Measured against the real schema: `true` throws `TypeError`; a plain
-  object is silently reinterpreted as a **named-parameter bag** (`RangeError: Too few
-  parameter values`); `undefined` **silently binds NULL**. This bites exactly the payloads
-  spec §7.2 specifies — `{"isPublic": true}`, object-valued `contentJson`, and a `Partial`
-  update forwarding an absent key. Coerce at the boundary (`isPublic ? 1 : 0`,
-  `JSON.stringify(...)`, omit absent keys from the SQL) and narrow the param type before
-  writing `lib/notes.ts`. The helpers have **no call sites yet**, so typecheck proves
-  nothing here.
+- **`lib/db.ts`'s `query`/`get`/`run` now take `SqlParam[]`, not `unknown[]`** —
+  `number | string | bigint | Buffer | null`, the only things better-sqlite3 binds
+  positionally. `unknown[]` used to type-check values the driver rejects at runtime:
+  measured against the real schema, `true` throws `TypeError`; a plain object is silently
+  reinterpreted as a **named-parameter bag** (`RangeError: Too few parameter values`);
+  `undefined` **silently binds NULL**. That bites exactly the payloads spec §7.2
+  specifies. Still coerce at the boundary — `isPublic ? 1 : 0`, `JSON.stringify(...)`, and
+  build the `SET` clause from only the keys actually present rather than passing
+  `undefined` for absent ones.
+- **`lib/notes.ts` imports `./db.ts` *with* the extension, on purpose.** Extensionless
+  relative imports resolve under Turbopack but **not** under Node's type stripping, so an
+  extensionless `./db` makes the whole module unimportable from `scripts/*.ts` — that is a
+  real `ERR_MODULE_NOT_FOUND`, hit while verifying `createNote`. Keep the extension on
+  relative imports in anything a script might reach. (`lib/auth.ts` still uses `./db`; it
+  is only ever loaded by Next, so it works — but prefer the extension in new code.)
 
 - **Do not submit auth forms through a React 19 `<form action={…}>`.** `useActionState`'s
   dispatch wraps the action in `requestFormReset` (`react-dom-client.development.js`
@@ -194,6 +247,46 @@ The spec was written against older tooling. Follow the repo, not the spec, here:
   harness* failing, not the app. Browsers always attach `Origin` to a same-origin
   `fetch`, so `signOut()` from a client component works. Send `-H "Origin:
   http://localhost:3000"` when probing it by hand.
+- **TipTap v3 needs `immediatelyRender: false` under the App Router.** v3 defaults it to
+  `true`, and a client component calling `useEditor` that gets server-rendered on the
+  first pass throws `Tiptap Error: SSR has been detected, please set immediatelyRender
+  explicitly to false to avoid hydration mismatches.` Setting it also flips the `useEditor`
+  overload — the hook then returns **`Editor | null`**, so every consumer needs a null
+  branch. `NoteEditor.tsx` renders a same-height placeholder there so hydration doesn't
+  shift the page.
+- **v3 defaults `shouldRerenderOnTransaction` to `false`** (v2 re-rendered on every
+  transaction). A toolbar that calls `editor.isActive("bold")` directly in JSX therefore
+  renders once and then **never updates** as the caret moves — it looks broken and the
+  cause is not obvious. Read through `useEditorState({ editor, selector })` instead, which
+  is what `NoteEditor.tsx` does.
+- **A TipTap editor contributes nothing to `FormData`.** It is a contenteditable, not a
+  form control, so there is no `name` for the browser to serialise and a `<form action>`
+  would post the title alone. `NewNoteForm.tsx` holds the latest document in a **ref**
+  (not state — the editor fires on every keystroke and none of it changes what renders)
+  and does `formData.set("contentJson", JSON.stringify(doc))` inside `onSubmit`.
+- **Toolbar buttons must carry `type="button"`.** Inside a `<form>` a bare `<button>`
+  defaults to `type="submit"`, so every bold/italic click would submit the note.
+- **TipTap ships no theme, and `@tailwindcss/typography` is not installed** — there is no
+  `prose` class to reach for. Editor content styling is hand-written in `app/globals.css`
+  under `.tiptap-content`, the class applied via `editorProps.attributes.class`. Both
+  `NoteEditor` and `NoteContent` use that class, so stored notes look the same being
+  written and being read.
+- **`generateHTML` from `@tiptap/core` does NOT work server-side here.** It goes through
+  ProseMirror's `DOMSerializer` and throws `ReferenceError: window is not defined` under
+  the Node runtime — verified directly. Rendering stored notes to HTML on the server would
+  mean adding jsdom, so `NoteContent.tsx` uses a read-only editor (`editable: false`)
+  instead. That also keeps `dangerouslySetInnerHTML` out of the codebase: markup can only
+  come from the schema, so a stored document cannot inject anything the extensions do not
+  allow. Keep it that way if `/p/[slug]` gets built — it renders untrusted content to
+  anonymous visitors.
+- **Read-only and editable views must share the same extension config.** `NoteContent`
+  repeats `heading: { levels: [2, 3] }` on purpose: a schema mismatch silently drops nodes
+  the stored document actually contains.
+- **Content is not in the server-rendered HTML.** `immediatelyRender: false` means the
+  read-only view renders a "Loading content…" placeholder server-side and fills in after
+  hydration. The document JSON *is* in the RSC payload, so nothing extra is fetched, but
+  the text is not present for a non-JS client. Matters if `/p/[slug]` ever needs SEO —
+  that would be the one place worth adding jsdom for a real server render.
 - **Route gates go in the page, not a layout.** A layout is not re-rendered on every
   navigation inside its segment, so a session check placed there can go stale while the
   user moves between routes. `app/dashboard/page.tsx` calls `getSession` directly. Adding
