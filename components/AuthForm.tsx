@@ -75,18 +75,16 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
-      <fieldset disabled={pending} className="flex flex-col gap-4">
-        <legend className="sr-only">
-          {isSignup ? 'Account details' : 'Login details'}
-        </legend>
+    <form onSubmit={handleSubmit} className='mt-8 flex flex-col gap-5'>
+      <fieldset disabled={pending} className='flex flex-col gap-4'>
+        <legend className='sr-only'>{isSignup ? 'Account details' : 'Login details'}</legend>
 
-        <Field id="email" label="Email" type="email" autoComplete="email" />
+        <Field id='email' label='Email' type='email' autoComplete='email' />
 
         <Field
-          id="password"
-          label="Password"
-          type="password"
+          id='password'
+          label='Password'
+          type='password'
           autoComplete={isSignup ? 'new-password' : 'current-password'}
           minLength={isSignup ? 8 : undefined}
           maxLength={128}
@@ -95,18 +93,18 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       </fieldset>
 
       {/* Always rendered so the live region exists before a message lands in it. */}
-      <div role="alert" aria-live="polite">
+      <div role='alert' aria-live='polite'>
         {message && (
-          <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          <p className='rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300'>
             {message}
           </p>
         )}
       </div>
 
       <button
-        type="submit"
+        type='submit'
         disabled={pending}
-        className="w-full rounded-md bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+        className='w-full rounded-md bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60'
       >
         {pending
           ? isSignup
@@ -130,8 +128,8 @@ function Field({ id, label, hint, ...inputProps }: FieldProps) {
   const hintId = `${id}-hint`;
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-neutral-300">
+    <div className='flex flex-col gap-1.5'>
+      <label htmlFor={id} className='text-sm font-medium text-neutral-300'>
         {label}
       </label>
       <input
@@ -139,11 +137,11 @@ function Field({ id, label, hint, ...inputProps }: FieldProps) {
         name={id}
         required
         aria-describedby={hint ? hintId : undefined}
-        className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-neutral-100 transition-colors placeholder:text-neutral-500 focus-visible:border-slate-400 focus-visible:outline-2 focus-visible:outline-slate-400 disabled:opacity-60"
+        className='w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-neutral-100 transition-colors placeholder:text-neutral-500 focus-visible:border-slate-400 focus-visible:outline-2 focus-visible:outline-slate-400 disabled:opacity-60'
         {...inputProps}
       />
       {hint && (
-        <p id={hintId} className="text-xs text-neutral-500">
+        <p id={hintId} className='text-xs text-neutral-500'>
           {hint}
         </p>
       )}

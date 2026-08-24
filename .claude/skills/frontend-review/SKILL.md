@@ -9,7 +9,7 @@ Reviews changed code against the practice skills already installed in this repo,
 **applies** two classes of fix: unused imports/dead bindings (always removed) and anything
 the user approves from the findings list.
 
-This is a *review that edits*, not a report. Do not stop at describing problems.
+This is a _review that edits_, not a report. Do not stop at describing problems.
 
 ---
 
@@ -18,15 +18,15 @@ This is a *review that edits*, not a report. Do not stop at describing problems.
 Before reading a single line of the diff, invoke these with the Skill tool. They are the
 rubric; reviewing from memory produces vague, unciteable findings.
 
-| Skill | Load when |
-| --- | --- |
-| `modern-best-practice-react-components` | any `.tsx` changed — **always** for components |
-| `modern-accessible-html-jsx` | any JSX markup changed — **always** for components |
-| `modern-tailwind` | any `className` or `.css` changed |
-| `clean-typescript` | any `.ts`/`.tsx` changed — **always** |
-| `modern-best-practice-nextjs` | anything under `app/` changed |
-| `web-security` | auth, DB queries, user-supplied content, or `dangerouslySetInnerHTML` |
-| `modern-browser-apis` | hand-rolled behaviour a browser API already provides (dialogs, popovers, clipboard, view transitions) |
+| Skill                                   | Load when                                                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `modern-best-practice-react-components` | any `.tsx` changed — **always** for components                                                        |
+| `modern-accessible-html-jsx`            | any JSX markup changed — **always** for components                                                    |
+| `modern-tailwind`                       | any `className` or `.css` changed                                                                     |
+| `clean-typescript`                      | any `.ts`/`.tsx` changed — **always**                                                                 |
+| `modern-best-practice-nextjs`           | anything under `app/` changed                                                                         |
+| `web-security`                          | auth, DB queries, user-supplied content, or `dangerouslySetInnerHTML`                                 |
+| `modern-browser-apis`                   | hand-rolled behaviour a browser API already provides (dialogs, popovers, clipboard, view transitions) |
 
 Load them in one message (parallel tool calls). Cite the skill by name in each finding so
 the reasoning is checkable — a finding no skill or file backs up should be dropped.
@@ -55,7 +55,7 @@ context that decides whether something is actually wrong.
 **Do this without asking.** It is the one category this skill always fixes outright.
 
 `npm run lint` does **not** catch these in this repo: `@typescript-eslint/no-unused-vars`
-is configured as a *warning* by `eslint-config-next`, and `npm run lint` runs bare
+is configured as a _warning_ by `eslint-config-next`, and `npm run lint` runs bare
 `eslint`, so it **exits 0 with unused imports present**. Verified. Force a real signal:
 
 ```bash
@@ -73,7 +73,7 @@ What to remove:
   signature genuinely requires the slot)
 - unreachable code, and functions/exports with no call sites anywhere in the repo
 
-Before deleting an *export*, prove it is dead. `grep` the whole repo, not just the diff:
+Before deleting an _export_, prove it is dead. `grep` the whole repo, not just the diff:
 
 ```bash
 grep -rn "theSymbolName" --include=*.ts --include=*.tsx . | grep -v node_modules
@@ -91,6 +91,7 @@ Findings must be concrete: file, line, what breaks, and which skill or repo conv
 violates. Rank by severity. Skip anything you cannot back up.
 
 **React** (per `modern-best-practice-react-components`)
+
 - `useEffect` doing work that belongs in render, an event handler, or a derived value
 - state that could be derived, or duplicated in two places
 - state holding data that never affects the render — that belongs in a ref
@@ -99,6 +100,7 @@ violates. Rank by severity. Skip anything you cannot back up.
 - a client component that does not need to be one — could it be a server component?
 
 **Accessibility** (per `modern-accessible-html-jsx`)
+
 - `<div onClick>` where a `<button>` belongs
 - controls with no accessible name — icon-only buttons need `aria-label`
 - form inputs with no associated `<label>` (`htmlFor`/`id`)
@@ -109,6 +111,7 @@ violates. Rank by severity. Skip anything you cannot back up.
 - heading order, and **more than one `h1` on a page**
 
 **Tailwind** (per `modern-tailwind`)
+
 - long `className` strings that should be extracted or shared
 - arbitrary values (`top-[50px]`, `size-[100px]`) where a scale token exists
 - absolute positioning that a flex/grid parent would handle — this repo already hit a
@@ -119,6 +122,7 @@ violates. Rank by severity. Skip anything you cannot back up.
   does nothing. Theme tokens live in `app/globals.css` under `@theme inline`.
 
 **TypeScript** (per `clean-typescript`)
+
 - `any`, unchecked casts, or non-null `!` hiding a real branch
 - types wide enough to permit values that fail at runtime (see the `SqlParam` note below)
 - missing return types on exported functions

@@ -95,29 +95,29 @@ export function NoteForm({ noteId, initialTitle, initialDoc }: NoteFormProps): J
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
-      <fieldset disabled={pending} className="flex min-w-0 flex-col gap-6">
-        <legend className="sr-only">{isEdit ? 'Edit note' : 'New note'}</legend>
+    <form onSubmit={handleSubmit} className='mt-8 flex flex-col gap-6'>
+      <fieldset disabled={pending} className='flex min-w-0 flex-col gap-6'>
+        <legend className='sr-only'>{isEdit ? 'Edit note' : 'New note'}</legend>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="title" className="text-sm font-medium text-neutral-300">
+        <div className='flex flex-col gap-1.5'>
+          <label htmlFor='title' className='text-sm font-medium text-neutral-300'>
             Title
           </label>
           <input
-            id="title"
-            name="title"
+            id='title'
+            name='title'
             required
             defaultValue={initialTitle}
             onChange={handleTitleChange}
             maxLength={MAX_TITLE_LENGTH}
-            autoComplete="off"
-            placeholder="Untitled note"
-            className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2.5 text-base text-neutral-100 transition-colors placeholder:text-neutral-600 focus-visible:border-slate-400 focus-visible:outline-2 focus-visible:outline-slate-400 disabled:opacity-60"
+            autoComplete='off'
+            placeholder='Untitled note'
+            className='w-full rounded-md border border-white/10 bg-white/5 px-3 py-2.5 text-base text-neutral-100 transition-colors placeholder:text-neutral-600 focus-visible:border-slate-400 focus-visible:outline-2 focus-visible:outline-slate-400 disabled:opacity-60'
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <span id={CONTENT_LABEL_ID} className="text-sm font-medium text-neutral-300">
+        <div className='flex flex-col gap-1.5'>
+          <span id={CONTENT_LABEL_ID} className='text-sm font-medium text-neutral-300'>
             Content
           </span>
           <NoteEditor
@@ -126,43 +126,43 @@ export function NoteForm({ noteId, initialTitle, initialDoc }: NoteFormProps): J
             initialDoc={initialDoc}
             disabled={pending}
           />
-          <p className="text-xs text-neutral-500">
-            Use the toolbar, its keyboard shortcuts, or type markdown as you go —{' '}
-            <code>#</code> for a heading, <code>-</code> for a bullet,{' '}
-            <code>```</code> for a code block, <code>---</code> for a divider.
+          <p className='text-xs text-neutral-500'>
+            Use the toolbar, its keyboard shortcuts, or type markdown as you go — <code>#</code> for
+            a heading, <code>-</code> for a bullet, <code>```</code> for a code block,{' '}
+            <code>---</code> for a divider.
           </p>
         </div>
       </fieldset>
 
       {/* Always rendered so the live region exists before a message lands in it. */}
-      <div role="alert" aria-live="polite">
+      <div role='alert' aria-live='polite'>
         {error && (
-          <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          <p className='rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300'>
             {error}
           </p>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className='flex items-center gap-3'>
         <button
-          type="submit"
+          type='submit'
           disabled={pending}
-          className="rounded-md bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className='rounded-md bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 disabled:cursor-not-allowed disabled:opacity-60'
         >
           {pending ? 'Saving…' : isEdit ? 'Save changes' : 'Save note'}
         </button>
 
         {!isEdit && (
           <Link
-            href="/dashboard"
-            className="rounded-md px-3 py-2.5 text-sm font-medium text-neutral-400 transition-colors hover:text-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            href='/dashboard'
+            className='rounded-md px-3 py-2.5 text-sm font-medium text-neutral-400 transition-colors hover:text-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400'
           >
             Cancel
           </Link>
         )}
 
         {/* Separate from the error region so a save cannot be announced as an alert. */}
-        <span aria-live="polite" className="text-sm text-emerald-400">
+        <span aria-live='polite' className='text-sm text-emerald-400'>
           {saved ? 'Saved' : ''}
         </span>
       </div>

@@ -9,7 +9,7 @@ import { getDb } from '../lib/db.ts';
 const db = getDb();
 
 const authTableExists = db
-  .prepare('SELECT name FROM sqlite_master WHERE type = \'table\' AND name = \'user\'')
+  .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user'")
   .get();
 
 if (!authTableExists) {

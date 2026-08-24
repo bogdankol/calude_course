@@ -40,29 +40,27 @@ export default async function NotePage({ params }: NotePageProps): Promise<JSX.E
     <>
       <Header actions={<LogoutButton />} />
 
-      <main className="mx-auto w-full max-w-3xl px-6 py-10">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <main className='mx-auto w-full max-w-3xl px-6 py-10'>
+        <div className='mb-6 flex flex-wrap items-center justify-between gap-3'>
           <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            href='/dashboard'
+            className='inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400'
           >
             <span aria-hidden>←</span> Back
           </Link>
 
-          <div className="flex items-center gap-3">
+          <div className='flex items-center gap-3'>
             <DeleteNoteButton noteId={note.id} noteTitle={note.title} />
           </div>
         </div>
 
         <article>
           <header>
-            <h1 className="text-3xl font-semibold tracking-tight text-balance">
-              {note.title}
-            </h1>
-            <p className="mt-2 text-xs text-neutral-500">
+            <h1 className='text-3xl font-semibold tracking-tight text-balance'>{note.title}</h1>
+            <p className='mt-2 text-xs text-neutral-500'>
               Updated {formatTimestamp(note.updatedAt)}
               {note.isPublic && (
-                <span className="ml-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+                <span className='ml-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300'>
                   Public
                 </span>
               )}

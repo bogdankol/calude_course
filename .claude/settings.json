@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/enforce-single-quotes.mjs"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && npm run format"
           }
         ]
       }

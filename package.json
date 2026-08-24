@@ -12,9 +12,6 @@
     "db:init": "node --env-file=.env scripts/init-db.ts",
     "format": "oxfmt"
   },
-  "engines": {
-    "node": ">=20"
-  },
   "dependencies": {
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
@@ -38,6 +35,9 @@
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "ignoreScripts": [
     "sharp",

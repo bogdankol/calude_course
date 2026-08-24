@@ -94,10 +94,10 @@ export function createNote(
  * way to distinguish "does not exist" from "not yours".
  */
 export function getNoteById(userId: string, noteId: string): Note | null {
-  const row = get<NoteRow>(
-    `SELECT ${NOTE_COLUMNS} FROM notes WHERE id = ? AND user_id = ?`,
-    [noteId, userId],
-  );
+  const row = get<NoteRow>(`SELECT ${NOTE_COLUMNS} FROM notes WHERE id = ? AND user_id = ?`, [
+    noteId,
+    userId,
+  ]);
 
   return row ? toNote(row) : null;
 }

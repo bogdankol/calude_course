@@ -10,24 +10,24 @@ import type { JSX, ReactNode } from 'react';
  */
 export function Header({ actions }: { actions?: ReactNode }): JSX.Element {
   return (
-    <header className="sticky top-0 z-10 border-b border-white/10 bg-[color:var(--background)]/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-6">
+    <header className='sticky top-0 z-10 border-b border-white/10 bg-[color:var(--background)]/85 backdrop-blur-md'>
+      <div className='mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-6'>
         <Link
-          href="/dashboard"
-          className="-mx-2 flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+          href='/dashboard'
+          className='-mx-2 flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400'
         >
           <span
             aria-hidden
-            className="grid size-6 place-items-center rounded-[7px] bg-slate-700 text-[11px] font-bold text-white"
+            className='grid size-6 place-items-center rounded-[7px] bg-slate-700 text-[11px] font-bold text-white'
           >
             N
           </span>
-          <span className="text-[15px] font-semibold tracking-tight text-neutral-100">
+          <span className='text-[15px] font-semibold tracking-tight text-neutral-100'>
             NextNotes
           </span>
         </Link>
 
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className='flex items-center gap-2'>{actions}</div>}
       </div>
     </header>
   );

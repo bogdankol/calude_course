@@ -30,7 +30,7 @@ export function NoteContent({ doc }: { doc: JSONContent }): JSX.Element {
   });
 
   if (!editor) {
-    return <div className="tiptap-content text-neutral-600">Loading content…</div>;
+    return <div className='tiptap-content text-neutral-600'>Loading content…</div>;
   }
 
   return <EditorContent editor={editor} />;

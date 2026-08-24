@@ -24,20 +24,18 @@ export default async function NewNotePage(): Promise<JSX.Element> {
     <>
       <Header actions={<LogoutButton />} />
 
-      <main className="mx-auto w-full max-w-3xl px-6 py-10">
-        <nav className="mb-6">
+      <main className='mx-auto w-full max-w-3xl px-6 py-10'>
+        <nav className='mb-6'>
           <Link
-            href="/dashboard"
-            className="-mx-1.5 rounded px-1.5 py-1 text-sm text-neutral-400 transition-colors hover:text-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            href='/dashboard'
+            className='-mx-1.5 rounded px-1.5 py-1 text-sm text-neutral-400 transition-colors hover:text-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400'
           >
             ← Back to notes
           </Link>
         </nav>
 
-        <h1 className="text-2xl font-semibold tracking-tight">New note</h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          Give it a title, write something, and save.
-        </p>
+        <h1 className='text-2xl font-semibold tracking-tight'>New note</h1>
+        <p className='mt-1 text-sm text-neutral-400'>Give it a title, write something, and save.</p>
 
         <NoteForm />
       </main>

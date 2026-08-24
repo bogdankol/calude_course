@@ -18,9 +18,7 @@ function isTipTapDoc(value: string): boolean {
   try {
     const parsed: unknown = JSON.parse(value);
     return (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      (parsed as { type?: unknown }).type === 'doc'
+      typeof parsed === 'object' && parsed !== null && (parsed as { type?: unknown }).type === 'doc'
     );
   } catch {
     return false;
