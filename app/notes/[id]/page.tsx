@@ -3,25 +3,26 @@ import type { JSX } from 'react';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
-import type { JSONContent } from '@tiptap/core';
 import { auth } from '@/lib/auth';
 import { getNoteById } from '@/lib/notes';
-import { EMPTY_DOC } from '@/lib/tiptap';
+import { parseNoteDoc } from '@/lib/note-doc';
+import { resolveAppOrigin } from '@/lib/share-url';
 import { formatTimestamp } from '@/lib/format';
 import { Header } from '@/components/Header';
 import { LogoutButton } from '@/components/LogoutButton';
 import { NoteForm } from '@/components/NoteForm';
 import { DeleteNoteButton } from '@/components/DeleteNoteButton';
+import { ShareToggle } from '@/components/ShareToggle';
 
 type NotePageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: NotePageProps): Promise<Metadata> {
   const { id } = await params;
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { title: 'Note · NextNotes' };
+  if (!session) return { title: 'Note' };
 
   const note = getNoteById(session.user.id, id);
-  return { title: note ? `${note.title} · NextNotes` : 'Note not found · NextNotes' };
+  return { title: note ? note.title : 'Note not found' };
 }
 
 export default async function NotePage({ params }: NotePageProps): Promise<JSX.Element> {
@@ -29,8 +30,12 @@ export default async function NotePage({ params }: NotePageProps): Promise<JSX.E
   const { id } = await params;
 
   // This page had no gate at all and answered 200 to anonymous requests.
-  const session = await auth.api.getSession({ headers: await headers() });
+  const headerList = await headers();
+  const session = await auth.api.getSession({ headers: headerList });
   if (!session) redirect('/authenticate');
+
+  // The share link has to be absolute for copy-paste to be useful.
+  const origin = resolveAppOrigin(process.env.BETTER_AUTH_URL, headerList.get('host'));
 
   // Ownership is enforced in the query, so someone else's note id is simply "not found".
   const note = getNoteById(session.user.id, id);
@@ -67,6 +72,15 @@ export default async function NotePage({ params }: NotePageProps): Promise<JSX.E
             </p>
           </header>
 
+          <div className='mt-6'>
+            <ShareToggle
+              noteId={note.id}
+              initialIsPublic={note.isPublic}
+              initialSlug={note.publicSlug}
+              origin={origin}
+            />
+          </div>
+
           {/*
             SPEC.MD §8.1 makes /notes/[id] the editor, so the body is the editable form.
             The h1 above still shows the stored title — `router.refresh()` after a save
@@ -75,30 +89,10 @@ export default async function NotePage({ params }: NotePageProps): Promise<JSX.E
           <NoteForm
             noteId={note.id}
             initialTitle={note.title}
-            initialDoc={parseDoc(note.contentJson)}
+            initialDoc={parseNoteDoc(note.contentJson)}
           />
         </article>
       </main>
     </>
   );
-}
-
-/**
- * `content_json` is TEXT, so nothing at the database level guarantees it parses. A note
- * that somehow stored garbage should still render its title rather than crash the page.
- */
-function parseDoc(contentJson: string): JSONContent {
-  try {
-    const parsed: unknown = JSON.parse(contentJson);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      (parsed as { type?: unknown }).type === 'doc'
-    ) {
-      return parsed as JSONContent;
-    }
-  } catch {
-    // fall through to the empty document
-  }
-  return EMPTY_DOC;
 }

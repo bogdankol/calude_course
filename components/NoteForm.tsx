@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { JSONContent } from '@tiptap/react';
 import { NoteEditor } from '@/components/NoteEditor';
-import { EMPTY_DOC } from '@/lib/tiptap';
+import { EMPTY_DOC } from '@/lib/note-doc';
 import { createNoteAction } from '@/app/notes/new/actions';
 import { updateNoteAction } from '@/app/notes/[id]/actions';
 

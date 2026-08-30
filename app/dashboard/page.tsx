@@ -10,7 +10,7 @@ import { LogoutButton } from '@/components/LogoutButton';
 import { NoteList } from '@/components/NoteList';
 
 export const metadata: Metadata = {
-  title: 'Dashboard · Notes',
+  title: 'Dashboard',
 };
 
 export default async function DashboardPage(): Promise<JSX.Element> {

@@ -19,7 +19,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const mode = resolveMode((await searchParams).mode);
 
   return {
-    title: mode === 'signup' ? 'Sign up · Notes' : 'Log in · Notes',
+    title: mode === 'signup' ? 'Sign up' : 'Log in',
   };
 }
 

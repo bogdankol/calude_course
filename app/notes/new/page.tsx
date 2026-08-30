@@ -9,7 +9,7 @@ import { LogoutButton } from '@/components/LogoutButton';
 import { NoteForm } from '@/components/NoteForm';
 
 export const metadata: Metadata = {
-  title: 'New note · NextNotes',
+  title: 'New note',
 };
 
 /**

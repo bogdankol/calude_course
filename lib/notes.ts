@@ -3,6 +3,8 @@ import { nanoid } from 'nanoid';
 // run through Node's type stripping and will not resolve an extensionless relative path.
 // Turbopack and tsc both accept it (`allowImportingTsExtensions` is on, `noEmit` is set).
 import { get, query, run, type SqlParam } from './db.ts';
+import { EMPTY_DOC_JSON } from './note-doc.ts';
+import { buildNoteUpdate, resolveNoteTitle } from './note-fields.ts';
 
 /**
  * Application view of a row in `notes`. The table is snake_case; this is camelCase, and
@@ -35,11 +37,6 @@ type NoteRow = {
 const NOTE_COLUMNS =
   'id, user_id, title, content_json, is_public, public_slug, created_at, updated_at';
 
-/** What TipTap produces for an untouched editor, and what an empty note stores. */
-export const EMPTY_DOC_JSON = '{"type":"doc","content":[{"type":"paragraph"}]}';
-
-const DEFAULT_TITLE = 'Untitled note';
-
 function toNote(row: NoteRow): Note {
   return {
     id: row.id,
@@ -67,7 +64,7 @@ export function createNote(
   userId: string,
   data: { title?: string; contentJson?: string } = {},
 ): Note {
-  const title = data.title?.trim() || DEFAULT_TITLE;
+  const title = resolveNoteTitle(data.title);
   const contentJson = data.contentJson ?? EMPTY_DOC_JSON;
 
   const params: SqlParam[] = [nanoid(), userId, title, contentJson];
@@ -133,28 +130,69 @@ export function updateNote(
   noteId: string,
   data: Partial<{ title: string; contentJson: string }>,
 ): Note | null {
-  const assignments: string[] = [];
-  const params: SqlParam[] = [];
-
-  if (data.title !== undefined) {
-    assignments.push('title = ?');
-    params.push(data.title);
-  }
-  if (data.contentJson !== undefined) {
-    assignments.push('content_json = ?');
-    params.push(data.contentJson);
-  }
+  const update = buildNoteUpdate(data);
 
   // Nothing to change — report the note as-is rather than touching `updated_at`.
-  if (assignments.length === 0) return getNoteById(userId, noteId);
-
-  assignments.push("updated_at = datetime('now')");
+  if (!update) return getNoteById(userId, noteId);
 
   const row = get<NoteRow>(
-    `UPDATE notes SET ${assignments.join(', ')}
+    `UPDATE notes SET ${update.setClause}
       WHERE id = ? AND user_id = ?
       RETURNING ${NOTE_COLUMNS}`,
-    [...params, noteId, userId],
+    [...update.params, noteId, userId],
+  );
+
+  return row ? toNote(row) : null;
+}
+
+/**
+ * Length of a generated public slug. SPEC.MD §11 wants "16+ chars" so the URL cannot be
+ * guessed; nanoid's alphabet is 64 symbols, so 21 chars is ~126 bits of entropy.
+ */
+const PUBLIC_SLUG_LENGTH = 21;
+
+/**
+ * Turns public sharing on or off for one of `userId`'s notes.
+ *
+ * Enabling mints a slug; disabling sets `public_slug = NULL` as SPEC.MD §7.2 requires,
+ * which is what makes `/p/<slug>` 404 afterwards — the slug is not merely hidden, it is
+ * gone. Because unsharing clears it, re-sharing always issues a **new** slug and the
+ * revoked URL stays dead. The `?? nanoid(...)` fallback below therefore only guards the
+ * is_public=0-with-slug state that nothing in the app produces; it is not a promise that
+ * a link survives being switched off.
+ *
+ * Deliberately does NOT touch `updated_at`: sharing is not a content edit, and bumping it
+ * would jump the note to the top of the dashboard list for no reason the user can see.
+ */
+export function setNotePublic(userId: string, noteId: string, isPublic: boolean): Note | null {
+  const existing = getNoteById(userId, noteId);
+  if (!existing) return null;
+
+  const slug = isPublic ? (existing.publicSlug ?? nanoid(PUBLIC_SLUG_LENGTH)) : null;
+
+  const row = get<NoteRow>(
+    `UPDATE notes SET is_public = ?, public_slug = ?
+      WHERE id = ? AND user_id = ?
+      RETURNING ${NOTE_COLUMNS}`,
+    // `isPublic ? 1 : 0` because SQLite has no boolean and better-sqlite3 throws on `true`.
+    [isPublic ? 1 : 0, slug, noteId, userId],
+  );
+
+  return row ? toNote(row) : null;
+}
+
+/**
+ * Looks up a note by its public slug, for anonymous visitors to `/p/<slug>`.
+ *
+ * Not scoped to a user — that is the point — so the `is_public = 1` predicate is the
+ * whole authorisation check and must stay in the SQL. It is belt-and-braces alongside
+ * nulling the slug on unshare: even a row that somehow kept its slug stays unreachable
+ * once the flag is off.
+ */
+export function getNoteByPublicSlug(slug: string): Note | null {
+  const row = get<NoteRow>(
+    `SELECT ${NOTE_COLUMNS} FROM notes WHERE public_slug = ? AND is_public = 1`,
+    [slug],
   );
 
   return row ? toNote(row) : null;

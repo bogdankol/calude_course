@@ -3,33 +3,15 @@
 import { useState, type ComponentProps, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn, signUp } from '@/lib/auth-client';
+import { authErrorMessage } from '@/lib/auth-errors';
 
 export type AuthMode = 'login' | 'signup';
-
-/** better-auth resolves to `{ data, error }`; `error.code` is a stable machine string. */
-type AuthError = { code?: string; message?: string };
 
 /**
  * Tagged with the mode that produced it. Switching modes is a same-route navigation, so
  * this component stays mounted — an untagged message would linger over the other form.
  */
 type FormError = { mode: AuthMode; message: string };
-
-const ERROR_MESSAGES: Record<string, string | undefined> = {
-  INVALID_EMAIL_OR_PASSWORD: "That email and password don't match an account.",
-  USER_ALREADY_EXISTS: 'An account with that email already exists — log in instead.',
-  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-    'An account with that email already exists — log in instead.',
-  PASSWORD_TOO_SHORT: 'Password must be at least 8 characters.',
-  PASSWORD_TOO_LONG: 'Password must be 128 characters or fewer.',
-  INVALID_EMAIL: 'Enter a valid email address.',
-};
-
-const FALLBACK_MESSAGE = 'Something went wrong. Please try again.';
-
-function messageFor({ code, message }: AuthError) {
-  return (code ? ERROR_MESSAGES[code] : undefined) ?? message ?? FALLBACK_MESSAGE;
-}
 
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
@@ -63,7 +45,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       : await signIn.email({ email, password });
 
     if (authError) {
-      setError({ mode, message: messageFor(authError) });
+      setError({ mode, message: authErrorMessage(authError) });
       setPending(false);
       return;
     }

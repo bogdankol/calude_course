@@ -25,50 +25,57 @@ data layer for notes, the API routes, and all of the UI.
 
 ### Built and working
 
-| Path                              | What it does                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lib/db.ts`                       | `better-sqlite3` singleton parked on `globalThis` (survives dev HMR). WAL mode, `foreign_keys = ON`. Exports `getDb()` plus `query<T>` / `get<T>` / `run` helpers.                                                                                                                                                                                        |
-| `lib/auth.ts`                     | better-auth instance — email+password enabled, `nextCookies()` plugin **last** in the plugin array.                                                                                                                                                                                                                                                       |
-| `lib/auth-client.ts`              | React client; re-exports `signIn`, `signUp`, `signOut`, `useSession`.                                                                                                                                                                                                                                                                                     |
-| `app/api/auth/[...all]/route.ts`  | better-auth handler via `toNextJsHandler`.                                                                                                                                                                                                                                                                                                                |
-| `app/authenticate/page.tsx`       | Server component. Reads `?mode=signup` (anything else = login), redirects a live session to `/dashboard`, renders `AuthForm` + the mode-toggle `Link`. `generateMetadata` retitles per mode.                                                                                                                                                              |
-| `components/AuthForm.tsx`         | Client component. Email+password sign-in / sign-up against `lib/auth-client.ts`, uncontrolled inputs, `router.push("/dashboard")` on success.                                                                                                                                                                                                             |
-| `app/dashboard/page.tsx`          | Server component, **gated in the route itself** (not a layout): `getSession` → `redirect("/authenticate")` when absent. Renders `Header` (with `LogoutButton` in its actions slot), the note count + email, a **"New Note"** link, and the notes list via `NoteList` — or an empty state with a "Create your first note" CTA.                             |
-| `components/LogoutButton.tsx`     | Client component. `useTransition` + `signOut()`, then `router.push("/authenticate")` and `router.refresh()`. Now an inline pill so it can sit in `Header`'s `actions` slot — the old `absolute top-[50px] right-[200px] size-[100px]` box collided with the sticky header.                                                                                |
-| `components/Header.tsx`           | Server component. "NextNotes" wordmark linking to `/dashboard` via `next/link`, plus an optional `actions` slot for page-owned controls. Deliberately **not** mounted in `app/layout.tsx` — see the gotcha below.                                                                                                                                         |
-| `app/notes/new/page.tsx`          | Server component, session-gated exactly like the dashboard. Renders `Header`, a back link, and `NoteForm` (create mode).                                                                                                                                                                                                                                  |
-| `app/notes/new/actions.ts`        | `"use server"`. `createNoteAction(formData)` — re-checks the session, zod-validates the title and the TipTap JSON, calls `createNote`, `revalidatePath("/dashboard")`, then `redirect("/notes/<id>")`. Returns `{ error }` only when it declines to save.                                                                                                 |
-| `lib/tiptap.ts`                   | **Single source of truth for the note schema.** `HEADING_LEVELS` (`[1,2,3]`), `EMPTY_DOC`, and `noteExtensions()`. Both the editor and the read-only viewer call it, so their schemas cannot drift.                                                                                                                                                       |
-| `components/NoteEditor.tsx`       | Client component. TipTap v3 `useEditor` + `EditorContent`, plus the full **SPEC.MD §9.2 toolbar**: a Normal/H1/H2/H3 segmented group, then Bold, Italic, inline code, bullet list, code block, horizontal rule, undo, redo. Active state comes from `useEditorState`; every button carries its keyboard shortcut in `title` _and_ `aria-label`.           |
-| `app/notes/[id]/page.tsx`         | Server component, session-gated. **This is the editor**, per SPEC §8.1 — renders `Header`, a **Back** link to `/dashboard`, `DeleteNoteButton`, the note title as the `h1`, the UTC `updated_at`, and an editable `NoteForm` seeded with the stored title and document. `generateMetadata` retitles the tab. `notFound()` when the id is not this user's. |
-| `app/notes/[id]/actions.ts`       | `"use server"`. `updateNoteAction(noteId, formData)` — validates, calls `updateNote`, revalidates both paths, and **returns without redirecting** so the user stays in the editor. `deleteNoteAction(noteId)` — calls `deleteNote`, then `redirect("/dashboard")`. Both re-check the session.                                                             |
-| `lib/note-schema.ts`              | Shared zod validation (`NoteInputSchema`, `parseNoteInput`, `MAX_TITLE_LENGTH`) used by **both** the create and update actions so they cannot drift. Imports zod, so it is server-only — `NoteForm` keeps its own title-length constant rather than pulling zod into the client bundle.                                                                   |
-| `components/NoteForm.tsx`         | Client component. **One form for both create and edit** — `noteId` present means edit. Uncontrolled title + `NoteEditor`; a plain `onSubmit` attaches the editor JSON to `FormData`. Creating redirects; editing shows "Saved" and calls `router.refresh()` so the `h1` and timestamp resync. Replaced `NewNoteForm.tsx`, which is deleted.               |
-| `components/NoteContent.tsx`      | Client component. Read-only TipTap (`editable: false`) for a stored document. **Currently has no call sites** — `/notes/[id]` became the editor. Kept deliberately for `/p/[slug]` (spec §8.3 `PublicNoteViewer`): it encodes the fact that `generateHTML` cannot run server-side here. Do not "clean it up".                                             |
-| `components/NoteList.tsx`         | Server component. SPEC §8.3 shape (`{ id, title, updatedAt, isPublic }[]`) — a `ul`/`li` of `Link`s to `/notes/[id]`, with the timestamp and a "Public" badge.                                                                                                                                                                                            |
-| `components/DeleteNoteButton.tsx` | Client component. Confirms via a native `<dialog>` + `showModal()` (focus trap, Esc, inert background for free), then calls `deleteNoteAction`.                                                                                                                                                                                                           |
-| `lib/format.ts`                   | `formatTimestamp` — SQLite's `datetime('now')` is UTC with a space separator, so it needs `T`/`Z` before `Date` parses it as UTC. Locale and zone are pinned so server environment cannot change the output. Shared by the note page and the list.                                                                                                        |
-| `lib/notes.ts`                    | Data layer. `Note` type, the snake_case→camelCase row mapper, `EMPTY_DOC_JSON`, `createNote`, `getNoteById`, `getNotesByUser`, `updateNote`, `deleteNote`. All verified against the live DB (insert, trim, defaults, ordering, ownership, partial update, empty patch, double-delete, cleanup).                                                           |
-| `scripts/init-db.ts`              | Creates the `notes` table + its three indexes. Guards on the `user` table existing first.                                                                                                                                                                                                                                                                 |
-| `next.config.ts`                  | `serverExternalPackages: ["better-sqlite3"]` — already set.                                                                                                                                                                                                                                                                                               |
-| `.gitignore`                      | `.env*` with a `!.env.example` negation, and `/data/*.db*`. Both fixed.                                                                                                                                                                                                                                                                                   |
+| Path                              | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/db.ts`                       | `better-sqlite3` singleton parked on `globalThis` (survives dev HMR). WAL mode, `foreign_keys = ON`. Split into three testable pieces: `resolveDatabaseFile(path)` (pure — passes `:memory:` through untouched, since `path.resolve(":memory:")` yields a colon-bearing filename Windows rejects), `openDatabase(file)` (mkdir + connect + pragmas), and `getDb()` (the singleton). Plus `query<T>` / `get<T>` / `run`.                                                                                                          |
+| `lib/auth.ts`                     | better-auth instance — email+password enabled, `nextCookies()` plugin **last** in the plugin array.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `lib/auth-client.ts`              | React client; re-exports `signIn`, `signUp`, `signOut`, `useSession`.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `app/api/auth/[...all]/route.ts`  | better-auth handler via `toNextJsHandler`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `app/authenticate/page.tsx`       | Server component. Reads `?mode=signup` (anything else = login), redirects a live session to `/dashboard`, renders `AuthForm` + the mode-toggle `Link`. `generateMetadata` retitles per mode.                                                                                                                                                                                                                                                                                                                                     |
+| `components/AuthForm.tsx`         | Client component. Email+password sign-in / sign-up against `lib/auth-client.ts`, uncontrolled inputs, `router.push("/dashboard")` on success.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `app/dashboard/page.tsx`          | Server component, **gated in the route itself** (not a layout): `getSession` → `redirect("/authenticate")` when absent. Renders `Header` (with `LogoutButton` in its actions slot), the note count + email, a **"New Note"** link, and the notes list via `NoteList` — or an empty state with a "Create your first note" CTA.                                                                                                                                                                                                    |
+| `components/LogoutButton.tsx`     | Client component. `useTransition` + `signOut()`, then `router.push("/authenticate")` and `router.refresh()`. Now an inline pill so it can sit in `Header`'s `actions` slot — the old `absolute top-[50px] right-[200px] size-[100px]` box collided with the sticky header.                                                                                                                                                                                                                                                       |
+| `components/Header.tsx`           | Server component. "NextNotes" wordmark linking to `/dashboard` via `next/link`, plus an optional `actions` slot for page-owned controls. Deliberately **not** mounted in `app/layout.tsx` — see the gotcha below.                                                                                                                                                                                                                                                                                                                |
+| `app/notes/new/page.tsx`          | Server component, session-gated exactly like the dashboard. Renders `Header`, a back link, and `NoteForm` (create mode).                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `app/notes/new/actions.ts`        | `"use server"`. `createNoteAction(formData)` — re-checks the session, zod-validates the title and the TipTap JSON, calls `createNote`, `revalidatePath("/dashboard")`, then `redirect("/notes/<id>")`. Returns `{ error }` only when it declines to save.                                                                                                                                                                                                                                                                        |
+| `lib/tiptap.ts`                   | **Single source of truth for the note schema.** `HEADING_LEVELS` (`[1,2,3]`) and `noteExtensions()`. Both the editor and the read-only viewer call it, so their schemas cannot drift. `EMPTY_DOC` **moved out** to `lib/note-doc.ts` — importing it no longer drags StarterKit along.                                                                                                                                                                                                                                            |
+| `lib/note-doc.ts`                 | The stored-document layer, and **dependency-free** (the `JSONContent` import is type-only). `EMPTY_DOC`, `EMPTY_DOC_JSON` (derived via `JSON.stringify`, not a second literal), `isNoteDocJson`, and `parseNoteDoc`. Replaced two byte-identical `parseDoc` copies in `/notes/[id]` and `/p/[slug]`, plus `note-schema.ts`’s private `isTipTapDoc`.                                                                                                                                                                              |
+| `lib/note-fields.ts`              | Field rules split out of `lib/notes.ts` so they test without a database: `DEFAULT_NOTE_TITLE`, `resolveNoteTitle`, and `buildNoteUpdate` (returns `{ setClause, params }` or **null** for an empty patch — the guard against `undefined` binding NULL).                                                                                                                                                                                                                                                                          |
+| `lib/schema.ts`                   | `NOTES_SCHEMA_SQL`, the `notes` DDL. Shared by `scripts/init-db.ts` and the test suite so the migration and the tests build the _same_ table.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `lib/auth-errors.ts`              | better-auth code → human message (`authErrorMessage`, `AUTH_ERROR_MESSAGES`, `AUTH_FALLBACK_MESSAGE`), lifted out of `AuthForm`. Pure strings, so it costs the client bundle nothing.                                                                                                                                                                                                                                                                                                                                            |
+| `lib/share-url.ts`                | `resolveAppOrigin(configuredUrl, host)` and `publicNoteUrl(origin, slug)`. Both pure — the env read stays at the page, so `ShareToggle` can import this without a server-only dependency. `resolveAppOrigin` now also strips a trailing slash.                                                                                                                                                                                                                                                                                   |
+| `components/NoteEditor.tsx`       | Client component. TipTap v3 `useEditor` + `EditorContent`, plus the full **SPEC.MD §9.2 toolbar**: a Normal/H1/H2/H3 segmented group, then Bold, Italic, inline code, bullet list, code block, horizontal rule, undo, redo. Active state comes from `useEditorState`; every button carries its keyboard shortcut in `title` _and_ `aria-label`.                                                                                                                                                                                  |
+| `app/notes/[id]/page.tsx`         | Server component, session-gated. **This is the editor**, per SPEC §8.1 — renders `Header`, a **Back** link to `/dashboard`, `DeleteNoteButton`, the note title as the `h1`, the UTC `updated_at`, and an editable `NoteForm` seeded with the stored title and document. `generateMetadata` retitles the tab. `notFound()` when the id is not this user's.                                                                                                                                                                        |
+| `app/notes/[id]/actions.ts`       | `"use server"`. `updateNoteAction(noteId, formData)` — validates, calls `updateNote`, revalidates both paths, and **returns without redirecting** so the user stays in the editor. `deleteNoteAction(noteId)` — calls `deleteNote`, then `redirect("/dashboard")`. `setNoteSharingAction(noteId, isPublic)` — flips sharing and returns the stored `{ isPublic, publicSlug }` so the client shows what the DB holds, revalidating `/dashboard`, `/notes/<id>` and the `/p/[slug]` route pattern. All three re-check the session. |
+| `lib/note-schema.ts`              | Shared zod validation (`NoteInputSchema`, `parseNoteInput`, `MAX_TITLE_LENGTH`) used by **both** the create and update actions so they cannot drift. Delegates the document check to `isNoteDocJson` in `lib/note-doc.ts`. Imports zod, so it is server-only — `NoteForm` keeps its own title-length constant rather than pulling zod into the client bundle.                                                                                                                                                                    |
+| `components/NoteForm.tsx`         | Client component. **One form for both create and edit** — `noteId` present means edit. Uncontrolled title + `NoteEditor`; a plain `onSubmit` attaches the editor JSON to `FormData`. Creating redirects; editing shows "Saved" and calls `router.refresh()` so the `h1` and timestamp resync. Replaced `NewNoteForm.tsx`, which is deleted.                                                                                                                                                                                      |
+| `components/NoteContent.tsx`      | Client component. Read-only TipTap (`editable: false`) for a stored document. Its one call site is `/p/[slug]`, which is why it was kept when `/notes/[id]` became the editor. Schema-constrained by design — it is what keeps `dangerouslySetInnerHTML` out of the public path.                                                                                                                                                                                                                                                 |
+| `app/p/[slug]/page.tsx`           | **Public, unauthenticated** read-only view (spec §3.3 / §8.1). `getNoteByPublicSlug` → `notFound()`. Renders title + `NoteContent` and deliberately **no `Header`**, no owner info, no link into `/dashboard`. `generateMetadata` sets `robots: noindex` so an unguessable slug is not defeated by a crawler.                                                                                                                                                                                                                    |
+| `components/ShareToggle.tsx`      | Client component. SPEC §8.3 share switch — a `role="switch"` **button** (not a styled `<input>`: pseudo-elements do not render on replaced elements), plus the absolute public URL and a clipboard Copy button once sharing is on.                                                                                                                                                                                                                                                                                               |
+| `components/NoteList.tsx`         | Server component. SPEC §8.3 shape (`{ id, title, updatedAt, isPublic }[]`) — a `ul`/`li` of `Link`s to `/notes/[id]`, with the timestamp and a "Public" badge.                                                                                                                                                                                                                                                                                                                                                                   |
+| `components/DeleteNoteButton.tsx` | Client component. Confirms via a native `<dialog>` + `showModal()` (focus trap, Esc, inert background for free), then calls `deleteNoteAction`.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `lib/format.ts`                   | `formatTimestamp` — SQLite's `datetime('now')` is UTC with a space separator, so it needs `T`/`Z` before `Date` parses it as UTC. Locale and zone are pinned so server environment cannot change the output. Shared by the note page and the list.                                                                                                                                                                                                                                                                               |
+| `lib/notes.ts`                    | Data layer. `Note` type, the snake_case→camelCase row mapper, `createNote`, `getNoteById`, `getNotesByUser`, `updateNote`, `deleteNote`, `setNotePublic`, `getNoteByPublicSlug`. Title defaulting and the partial-update SET clause now live in `lib/note-fields.ts`. Verified against the live DB **and** covered by 36 unit tests against an in-memory one.                                                                                                                                                                    |
+| `scripts/init-db.ts`              | Creates the `notes` table + its three indexes from `NOTES_SCHEMA_SQL` in `lib/schema.ts`. Guards on the `user` table existing first.                                                                                                                                                                                                                                                                                                                                                                                             |
+| `next.config.ts`                  | `serverExternalPackages: ["better-sqlite3"]` — already set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `.gitignore`                      | `.env*` with a `!.env.example` negation, and `/data/*.db*`. Both fixed.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 `data/app.db` exists and contains all five tables: `account`, `notes`, `session`,
 `user`, `verification`. No migration step is needed to start working.
 
 ### Stubs — placeholder markup only, no logic
 
-`app/p/[slug]/page.tsx` — the last one.
+**None left.** Every route in spec §8.1 is built.
 
 `app/page.tsx` is **not** a stub — it is a finished spec §8.1 landing page with working
 CTAs to `/authenticate` and `/authenticate?mode=signup`, and the target page now reads
 that `mode` param. `app/authenticate/page.tsx` is likewise finished, and
-`app/dashboard/page.tsx` has a real auth gate (its notes list is still a placeholder).
+`app/dashboard/page.tsx` has a real auth gate and a real notes list.
 
-The six client components are `AuthForm.tsx`, `LogoutButton.tsx`, `NoteForm.tsx`,
-`NoteEditor.tsx`, `NoteContent.tsx`, and `DeleteNoteButton.tsx` — no other file carries
-`"use client"`. `Header.tsx` and `NoteList.tsx` are server components (a `Link` needs no
-client boundary). The auth pair
+The seven client components are `AuthForm.tsx`, `LogoutButton.tsx`, `NoteForm.tsx`,
+`NoteEditor.tsx`, `NoteContent.tsx`, `DeleteNoteButton.tsx`, and `ShareToggle.tsx` — no
+other file carries `"use client"`. `Header.tsx` and `NoteList.tsx` are server components (a
+`Link` needs no client boundary). The auth pair
 consume `signIn` / `signUp` / `signOut` from `lib/auth-client.ts`; **`useSession` is the
 last dead export**, with no call sites.
 
@@ -84,9 +91,8 @@ for `/p/[slug]` (§8.1); for the first two it is simply a choice, easily changed
 
 ### Not created yet
 
-- **The rest of `lib/notes.ts`.** `createNote`, `getNoteById`, `getNotesByUser`,
-  `updateNote` and `deleteNote` are written; still missing are `setNotePublic` and
-  `getNoteByPublicSlug` — i.e. only public sharing is left. The signatures are in
+- **Nothing in `lib/notes.ts`** — all seven §6.2 functions are written and probed. Kept
+  here only for the naming history: the signatures are in
   `SPEC.MD` **§6.2** (not §6.4 — an earlier
   version of this file cited the wrong section _and_ the wrong names: the spec says
   `getNotesByUser` / `getNoteById`, never `listNotes` / `getNote`). Follow the spec's
@@ -95,14 +101,13 @@ for `/p/[slug]` (§8.1); for the first two it is simply a choice, easily changed
   decoration — `await` on the result still works. Match that for the rest.
 - **`app/api/notes/*`** — no route handlers exist. The new-note flow goes through a
   Server Action instead, so the API surface in spec §7.2 is still entirely unbuilt.
-- **`components/`** — holds `AuthForm`, `LogoutButton`, `Header`, `NoteForm`,
-  `NoteEditor`, `NoteContent`, `NoteList`, `DeleteNoteButton`. Of spec §8.3 only
-  `ShareToggle` is left; `PublicNoteViewer` is essentially `NoteContent` already.
-- **`middleware.ts`** — no optimistic cookie gate yet.
-- **Real content on `/p/[slug]`.** The dashboard list is **built** (`NoteList` +
-  `getNotesByUser`), so this is the last page still showing placeholder markup.
-- **Public sharing.** `ShareToggle`, `setNotePublic`, `getNoteByPublicSlug`, and real
-  content on `/p/[slug]` — the last unbuilt feature from spec §3.3.
+- **`components/`** — every §8.3 component now exists. `PublicNoteViewer` is `NoteContent`
+  under a different name; there is no separate file and there does not need to be.
+- **`middleware.ts`** — no optimistic cookie gate yet. The only genuinely unbuilt item.
+
+**Every functional requirement in spec §3 is implemented**: auth, note CRUD, and public
+sharing. What is left is optional hardening — the §7.2 REST surface, a `middleware.ts`
+cookie gate, and route-level `loading.tsx` / `error.tsx`.
 
 ## Commands
 
@@ -110,15 +115,18 @@ Use **npm**. Both `bun.lock` and `package-lock.json` are committed, but the proj
 targets the Node.js runtime — treat `bun.lock` as stale. (`.claude/settings.local.json`
 still allowlists `bun run …` from earlier sessions; that is history, not guidance.)
 
-| Task                 | Command             |
-| -------------------- | ------------------- |
-| Dev server           | `npm run dev`       |
-| Production build     | `npm run build`     |
-| Serve the build      | `npm start`         |
-| Lint                 | `npm run lint`      |
-| Type check           | `npm run typecheck` |
-| Create auth tables   | `npm run db:auth`   |
-| Create `notes` table | `npm run db:init`   |
+| Task                 | Command                 |
+| -------------------- | ----------------------- |
+| Dev server           | `npm run dev`           |
+| Production build     | `npm run build`         |
+| Serve the build      | `npm start`             |
+| Lint                 | `npm run lint`          |
+| Type check           | `npm run typecheck`     |
+| Create auth tables   | `npm run db:auth`       |
+| Create `notes` table | `npm run db:init`       |
+| Unit tests           | `npm test`              |
+| Tests in watch mode  | `npm run test:watch`    |
+| Coverage             | `npm run test:coverage` |
 
 - `npm run lint` invokes bare `eslint`, not `next lint` — Next.js 16 removed `next lint`.
 - **`npm run lint` exits 0 with unused imports present.** `eslint-config-next` sets
@@ -136,11 +144,13 @@ still allowlists `bun run …` from earlier sessions; that is history, not guida
     governed by `jsx-quotes`, not this rule, so `className="…"` correctly stays double; and
     `avoidEscape` leaves `"it's fine"` and `"updated_at = datetime('now')"` on double
     quotes rather than escaping them. Both verified.
-  - `.claude/settings.json` registers a **`PostToolUse` hook** on `Write|Edit` running
-    `.claude/hooks/enforce-single-quotes.mjs`, which autofixes the single file just
-    written. It fixes rather than nags, and **exits 2 when it changed something** — for
-    `PostToolUse` that is not a rollback, it just feeds the message back so Claude knows
-    its copy of the file is stale. Exits 0 silently for non-JS extensions and no-ops.
+  - `.claude/settings.json` registers a **`PostToolUse` hook** on `Write|Edit` — it now
+    runs **`npm run format` (oxfmt)**, not the older
+    `.claude/hooks/enforce-single-quotes.mjs`. That script still sits on disk but is **no
+    longer wired to anything**; `.oxfmtrc.json` (`singleQuote`, `jsxSingleQuote`) enforces
+    the style now, with the ESLint rule as the gate. The hook fires on `Write`/`Edit`
+    **only** — a file written through the Bash tool (heredoc, `sed`, a node script) is not
+    formatted, so run `npm run format` by hand after doing that.
   - The core `quotes` rule is deprecated in ESLint 9 in favour of
     `@stylistic/eslint-plugin`, but it works and needs no new dependency. Revisit if
     ESLint 10 drops it.
@@ -165,8 +175,119 @@ still allowlists `bun run …` from earlier sessions; that is history, not guida
   duplicate-email rejection, wrong-password rejection, session issue, and the
   authenticated redirect were all exercised against `data/app.db` and behave correctly.
   Treat the version gap as a risk for _future_ migrations, not as a broken database.
-- **No test framework.** `npm run typecheck` is the only automated gate. If you add
-  tests, wire the runner into `package.json` yourself.
+- **Vitest is the unit-test runner** — `npm test` (`vitest run`), `npm run test:watch`,
+  `npm run test:coverage`. See "Testing" below. The app is _also_ driven end-to-end through
+  the **Playwright MCP plugin** — see "Verified in the browser".
+- **Page titles come from one template in `app/layout.tsx`.** The root metadata is
+  `title: { default: 'NextNotes', template: '%s · NextNotes' }`, so every page sets only its
+  own name (`'Dashboard'`, `'New note'`, the note's title) and the suffix is appended once.
+  Do not re-add a hand-written `· NextNotes`, or it doubles. Before this, the root carried
+  the scaffold's `'Create Next App'` and pages disagreed on the brand — two said
+  `· Notes`, three said `· NextNotes`.
+  - **`/p/[slug]` is the one exception**: it uses `title: { absolute: … }` so a shared note
+    renders under its own title with no app branding, matching the page's deliberate
+    lack of `Header` and owner info (spec §8.1).
+  - **`notFound()` discards whatever `generateMetadata` returned.** The `'Note not found'`
+    titles in `/notes/[id]` and `/p/[slug]` are therefore unreachable — the 404 boundary
+    supplies its own. Harmless, but do not count on them; measured.
+
+## Testing
+
+`vitest@4` in `devDependencies`, config in **`vitest.config.mts`** (`.mts`, not `.ts`: the
+config uses ESM syntax and a `.ts` file gets loaded as CommonJS, which warns on every run).
+**150 tests across 11 files**; `npm test` is now a gate alongside `typecheck` and `lint`.
+
+| Path                          | Covers                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `tests/helpers/fixtures.ts`   | Mock users, TipTap documents and seed notes.                                                                        |
+| `tests/helpers/db.ts`         | In-memory schema setup, seeding, and raw-row reads.                                                                 |
+| `tests/helpers/next-mocks.ts` | `RedirectSignal` + `captureRedirect` for Server Actions.                                                            |
+| `tests/lib/*.test.ts`         | `note-doc`, `note-fields`, `note-schema`, `notes`, `db` + `schema`, `format`, `tiptap`, `auth-errors`, `share-url`. |
+| `tests/app/*.test.ts`         | `createNoteAction`, `updateNoteAction`, `setNoteSharingAction`, `deleteNoteAction`.                                 |
+
+- **The data layer is tested against a real SQLite database, not a mocked one.**
+  `vitest.config.mts` sets `DATABASE_PATH=':memory:'`, so `getDb()` opens a throwaway
+  in-memory database per test file; `tests/helpers/db.ts` builds the tables from
+  `NOTES_SCHEMA_SQL` plus a minimal `user` stub. Ownership scoping, `ORDER BY` with its
+  `id` tie-break, the `is_public = 1` predicate and the partial-`UPDATE` behaviour are all
+  SQL-level properties — mocking `lib/db.ts` would assert query strings and prove none of
+  them.
+- **`tests/helpers/db.ts` throws on import unless `DATABASE_PATH` is exactly `':memory:'`.**
+  It calls `DROP TABLE`, and `data/app.db` is a live dev database with real accounts in it.
+  Do not weaken that guard.
+- **`resolveDatabaseFile` and `resolveAppOrigin` take their configured value as an
+  argument** rather than reading `process.env` themselves. That was a test finding, not a
+  style preference: with `process.env.X` as a default parameter, "nothing configured" is
+  inexpressible in a test, because the runner has already set the variable.
+- **Server Actions are unit-tested with `vi.mock` on `next/headers`, `next/navigation`,
+  `next/cache`, `@/lib/auth` and `@/lib/notes`.** The `'use server'` directive is inert
+  under Vite, and `@/app/notes/[id]/actions` resolves fine despite the bracketed segment.
+  `vi.mock` factories are hoisted above imports, so anything they close over must come from
+  `vi.hoisted` — these use an **async** `vi.hoisted` so the factory can `await import` the
+  shared `RedirectSignal`.
+- **The redirect mock throws, like the real one.** `redirect()` signals with a thrown
+  `NEXT_REDIRECT`; `captureRedirect(fn)` catches the signal and returns the URL, and
+  **fails if the action returned normally** — otherwise a dropped redirect reads as a pass.
+- **Actions log through `console.error` on their failure paths.** Tests exercising those
+  paths `vi.spyOn(console, 'error')` so the run stays quiet, then assert what was logged.
+- **Fake timers cannot control `created_at` / `updated_at`.** Those come from SQLite's own
+  `datetime('now')`, evaluated inside the engine — `vi.setSystemTime` only moves the JS
+  clock. Seed rows with **fixed timestamp strings** instead, which is also what makes the
+  ordering assertions deterministic given that function's one-second resolution.
+- **Coverage is `@vitest/coverage-v8`, scoped to `lib/` + `app/**/actions.ts`** and
+  excluding `lib/auth.ts` / `lib/auth-client.ts` (single third-party calls, no branches of
+  ours). Currently **100% of lines and functions**; the only uncovered statements are
+  `lib/notes.ts:81` and `:181`, both documented-unreachable type-narrowing guards.
+- **The suite was verified by mutation, not just by passing.** Eight deliberate regressions
+  — dropping `AND user_id = ?`, dropping `AND is_public = 1`, keeping the slug on unshare,
+  a fixed `SET` clause, removing an action's session re-check, taking the note owner from
+  the form, redirecting out of the editor on save, and echoing the requested share state
+  instead of the stored one — were each caught by exactly the tests meant to catch them.
+  Tests written after the code prove nothing until you have watched them fail; if you add
+  tests here, break the thing on purpose once.
+- **Components are not unit-tested, deliberately.** Next.js does not support unit-testing
+  **async Server Components**, which is what every page here is. Rather than test around
+  that, the logic worth asserting was **extracted** into `lib/auth-errors.ts`,
+  `lib/share-url.ts` and `lib/note-doc.ts`; what is left in `components/` is rendering,
+  covered by Playwright. Adding DOM tests would mean pulling in `jsdom`,
+  `@testing-library/react`, `@testing-library/dom`, `@testing-library/jest-dom` and
+  `@vitejs/plugin-react`.
+- **Windows: keep `include` / `exclude` globs on forward slashes** — Vitest's matcher does
+  not accept backslashes.
+
+## Verified in the browser
+
+Driven with the Playwright MCP plugin against `npm run dev` on 2026-08-24. Everything below
+was exercised as a real user and passed; `npm run typecheck`, `npx eslint . --max-warnings=0`
+and `npm run build` are all green.
+
+- **Gates** — `/dashboard`, `/notes/new`, `/notes/[id]` each 307 to `/authenticate`
+  anonymously; another user's note id is **404**, not the note. `setNotePublic` probed
+  directly with a foreign `userId` returns `null` and changes nothing.
+- **Auth** — wrong password → mapped message with **both fields still filled** (the
+  `onSubmit` choice documented above, working); `?mode=` switch hides the other mode's
+  error without remounting; short password blocked client-side by `minLength={8}` before any
+  request; duplicate email → "already exists"; sign-up auto-signs in; log in and log out
+  both work and the session is really gone afterwards.
+- **Editor** — every toolbar control: H1/H2/H3 + Normal, bold, italic, inline code, bullet
+  list, code block, horizontal rule, undo, redo. Active state tracks the caret (so
+  `useEditorState` is doing its job) and undo/redo disable correctly. Markdown input rules
+  work too (`##` → h2, `-` → list). Content round-trips through save/reload byte-exact.
+  Heading CSS is live — h1 computes to 28px against a 15px body, so Preflight is not
+  flattening it.
+- **Validation** — empty title blocked by `required`; **whitespace-only** title reaches the
+  action and is rejected by `.trim().min(1)` with the error rendered.
+- **Sharing** — toggle on mints a 21-char slug and shows the absolute URL; the public page
+  is **200 anonymously**, carries `robots: noindex, nofollow`, and leaks no wordmark, no
+  `/dashboard` link, no owner email; Copy puts exactly that URL on the clipboard; toggle off
+  404s the link and nulls the slug; `updated_at` is untouched by either flip.
+- **Delete** — the native `<dialog>` opens with focus on Cancel, Esc closes it without
+  deleting, confirming removes the row and returns to `/dashboard` with the count updated.
+- **Console** — zero unexpected errors across the whole run. The only three are the
+  deliberate negatives: 401 wrong password, 422 duplicate email, 404 foreign note. No React
+  warnings, no hydration mismatches.
+
+`.playwright-mcp/` (snapshots, console logs, screenshots) is now gitignored.
 
 ## Environment
 
@@ -254,6 +375,24 @@ constants.js` defines `PROXY_FILENAME` alongside the legacy `MIDDLEWARE_FILENAME
   omitted — loudly for `title` (`NOT NULL`) and **silently** for `content_json`. Both
   partial-update paths are covered by a probe, including the empty-patch case, which must
   be a no-op that does not even touch `updated_at`.
+- **Public sharing is authorised by SQL, not by a branch.** `getNoteByPublicSlug` carries
+  `AND is_public = 1` in the query — that predicate _is_ the access check for anonymous
+  visitors, so never lift it into JS. Unsharing also sets `public_slug = NULL` (spec §7.2),
+  so a leaked URL dies two ways. A probe covers the state a bug could produce: a row with a
+  slug but `is_public = 0` stays unreachable.
+- **`setNotePublic` deliberately does not bump `updated_at`.** Sharing is not a content
+  edit, and bumping it would shuffle the note to the top of the dashboard for no visible
+  reason. It does **not** preserve a URL across an off/on cycle, though: unsharing nulls the
+  slug, so re-sharing always mints a new one and the revoked link stays 404. The
+  `?? nanoid(...)` fallback only guards an `is_public = 0`-with-slug row, which nothing in
+  the app produces. Verified end-to-end: share → 200, unshare → the same URL 404s, re-share
+  → a different slug while the old one stays dead.
+- **`/p/[slug]` renders untrusted content to anonymous visitors.** It goes through
+  `NoteContent` (schema-constrained TipTap) precisely so markup can only come from the
+  editor schema. Never introduce `dangerouslySetInnerHTML` on that path, and keep the page
+  free of `Header`, owner info, and any link into `/dashboard` (spec §8.1 / §3.3). Its
+  metadata sets `robots: noindex` — an unguessable slug is pointless if a crawler publishes
+  it.
 - **SQLite orders TEXT by `BINARY` collation; JS `localeCompare` does not.** Cost a false
   test failure while verifying `getNotesByUser`: `ORDER BY updated_at DESC, id DESC` was
   correct, but the assertion re-sorted with `localeCompare`, which is locale-aware and

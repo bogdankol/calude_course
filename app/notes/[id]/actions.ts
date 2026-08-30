@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
-import { deleteNote, updateNote } from '@/lib/notes';
+import { deleteNote, setNotePublic, updateNote } from '@/lib/notes';
 import { parseNoteInput } from '@/lib/note-schema';
 
 /** `error` is null on a successful save; the delete action redirects instead. */
@@ -46,6 +46,46 @@ export async function updateNoteAction(
   revalidatePath('/dashboard');
   revalidatePath('/notes/' + noteId);
   return { error: null };
+}
+
+/**
+ * Result of a sharing toggle. On success it reports the stored state back, so the switch
+ * reflects what the database actually holds rather than what the client assumed.
+ */
+export type ShareResult =
+  | { ok: false; error: string }
+  | { ok: true; isPublic: boolean; publicSlug: string | null };
+
+/**
+ * Turns public sharing on or off for one of the caller's notes.
+ *
+ * Session re-checked here as always — an action is its own endpoint — and `setNotePublic`
+ * scopes by `user_id`, so a foreign note id changes nothing and comes back null.
+ */
+export async function setNoteSharingAction(
+  noteId: string,
+  isPublic: boolean,
+): Promise<ShareResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect('/authenticate');
+
+  let note;
+  try {
+    note = setNotePublic(session.user.id, noteId, isPublic);
+  } catch (cause) {
+    console.error('setNoteSharingAction: update failed', cause);
+    return { ok: false, error: 'Could not change sharing. Please try again.' };
+  }
+
+  if (!note) return { ok: false, error: 'That note no longer exists.' };
+
+  revalidatePath('/dashboard');
+  revalidatePath('/notes/' + noteId);
+  // The route pattern, not a concrete slug: on unshare the slug is already gone, so there
+  // is no specific path left to invalidate.
+  revalidatePath('/p/[slug]', 'page');
+
+  return { ok: true, isPublic: note.isPublic, publicSlug: note.publicSlug };
 }
 
 /**

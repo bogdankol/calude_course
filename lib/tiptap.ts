@@ -1,14 +1,10 @@
 import StarterKit from '@tiptap/starter-kit';
-import type { JSONContent } from '@tiptap/core';
 
 /**
  * Heading levels the app allows, per SPEC.MD §1 ("Heading levels (H1–H3) + normal text")
  * and the §9.2 toolbar list.
  */
 export const HEADING_LEVELS = [1, 2, 3] as const;
-
-/** What TipTap reports for an untouched document. */
-export const EMPTY_DOC: JSONContent = { type: 'doc', content: [{ type: 'paragraph' }] };
 
 /**
  * The one extension list for notes — used by the editor *and* the read-only viewer.
@@ -20,6 +16,9 @@ export const EMPTY_DOC: JSONContent = { type: 'doc', content: [{ type: 'paragrap
  * `StarterKit` alone is correct for v3 — it already bundles Code, CodeBlock, Link,
  * Underline, HorizontalRule and the list extensions, so importing any of those separately
  * would register them twice and TipTap would warn about duplicates.
+ *
+ * `EMPTY_DOC` used to live here too; it moved to `lib/note-doc.ts`, which carries no
+ * runtime dependency on TipTap and so can be imported from the validation path.
  */
 export function noteExtensions() {
   return [StarterKit.configure({ heading: { levels: [...HEADING_LEVELS] } })];

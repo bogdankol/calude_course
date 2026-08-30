@@ -2,21 +2,47 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 
+/** SQLite's special in-memory database. A name, not a path — it must not be resolved. */
+const IN_MEMORY = ':memory:';
+
+const DEFAULT_DATABASE_PATH = 'data/app.db';
+
+/**
+ * Where the database lives, as better-sqlite3 wants it.
+ *
+ * `:memory:` is passed through untouched: `path.resolve(':memory:')` produces a filename
+ * containing a colon, which Windows rejects outright.
+ *
+ * Takes the configured value as an argument rather than reading `process.env` itself, so
+ * it is a pure function and "no path configured" is expressible in a test.
+ */
+export function resolveDatabaseFile(databasePath: string | undefined): string {
+  const configured = databasePath || DEFAULT_DATABASE_PATH;
+  return configured === IN_MEMORY ? IN_MEMORY : path.resolve(configured);
+}
+
+/**
+ * Opens a connection with the pragmas this app expects.
+ *
+ * `foreign_keys = ON` is cheap insurance rather than a fix: better-sqlite3 is compiled with
+ * `SQLITE_DEFAULT_FOREIGN_KEYS=1`, so FKs are already enforced here. It matters if the
+ * driver is ever swapped for one using SQLite's stock default of OFF.
+ */
+export function openDatabase(file: string): Database.Database {
+  if (file !== IN_MEMORY) fs.mkdirSync(path.dirname(file), { recursive: true });
+
+  const db = new Database(file);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  return db;
+}
+
 // Next.js reloads modules on every edit in dev, which would otherwise open a new
 // SQLite handle per reload. Park the singleton on globalThis so it survives HMR.
 const globalForDb = globalThis as unknown as { __db?: Database.Database };
 
 export function getDb() {
-  if (!globalForDb.__db) {
-    const file = path.resolve(process.env.DATABASE_PATH ?? 'data/app.db');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-
-    const db = new Database(file);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-
-    globalForDb.__db = db;
-  }
+  globalForDb.__db ??= openDatabase(resolveDatabaseFile(process.env.DATABASE_PATH));
   return globalForDb.__db;
 }
 
